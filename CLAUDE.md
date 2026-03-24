@@ -34,14 +34,14 @@ Libraries must be installed in `~/Documents/Arduino/libraries/`:
 | 8 | DIR |
 | 9 | STEP |
 | 10–12 | MODE0/MODE1/MODE2 (microstep select) |
-| 13 | SLEEP (optional) |
-| A0 | Button 3 |
-| A1 | Button 1 |
-| A2 | Button 2 |
-| A3 | Button 4 |
+| 2 | Encoder CLK (interrupt pin) |
+| 3 | Encoder DT |
+| A0 | Forward button |
+| A1 | Reverse button |
+| A2 | Start/Stop button (intended for separate box near motor) |
 
 LCD: I2C address `0x27`, 20×4 characters.
-Motor: 400 steps/rev (0.9°/step), 200 RPM, 32x microstepping.
+Motor: 400 steps/rev (0.9°/step), default 100 RPM, 32x microstepping, range 10–400 RPM.
 
 ## Architecture
 
@@ -52,27 +52,28 @@ BasicStepperDriver  →  A4988  →  DRV8825 (active driver)
 ```
 
 **State variables:**
-- `angle` (int) — current step size in degrees (1–360), initialized to 40
-- `aTotal` (long) — accumulated total rotation in degrees
-- `distance` (float) — unused; display computes `aTotal * (OneRev / 360)` where `OneRev = 0.9` mm/rev
+- `rpm` (int) — current motor speed, adjusted by encoder in 10 RPM steps
+- `running` (bool) — whether the motor is currently turning
+- `dir` (int8_t) — 1 = forward, −1 = reverse
+- `encTicks` (volatile int) — raw encoder tick accumulator, read and cleared in `loop()`
 
-**Button behavior** (OneButton library, active-low):
+**Control behaviour:**
+- **Forward / Reverse buttons** — set direction and call `startMotor()` (works whether stopped or already running, allowing instant direction change)
+- **Start/Stop button** — toggles between `startMotor()` and `stopMotor()`; designed to live in a separate enclosure near the motor
+- **Rotary encoder** — increments/decrements `rpm` by 10, clamped to 10–400; calls `stepper.setRPM()` mid-run if motor is already running
 
-| Button | Click | Double-click | Long press |
-|--------|-------|--------------|------------|
-| 1 (A1) | Rotate +`angle`° | Increment `angle`, reset `aTotal` | Continuous +`angle`° |
-| 2 (A2) | Rotate −`angle`° | Decrement `angle`, reset `aTotal` | Continuous −`angle`° |
-| 3 (A0) | Rotate −`angle`° (but adds to `aTotal`) | Increment `angle`, reset `aTotal` | Continuous +`angle`° |
-| 4 (A3) | Rotate −`angle`° | Decrement `angle`, reset `aTotal` | Continuous −`angle`° |
+**Continuous-run motor control** (non-blocking):
+- `startMotor()` calls `stepper.startRotate(dir × 360000°)` (~1000 revolutions per block)
+- `loop()` calls `stepper.nextAction()` every iteration to pulse the STEP pin at the correct time
+- When `nextAction()` returns 0 (block complete), `loop()` immediately starts the next block — no pause
 
-Note: Button 3's click rotates *backward* but increments `aTotal` forward — this appears to be a bug.
+**Display** (refreshed on any state change):
+- Row 0: `>> FORWARD` / `<< REVERSE` (arrows shown only while running)
+- Row 1: `Speed:  NNN RPM`
+- Row 2: `Status: RUNNING` / `Status: STOPPED`
 
-**Display** (updated every loop iteration, ~10 ms):
-- Row 0: `Step Angle : <angle>`
-- Row 1: `Distance   : <aTotal × 0.9/360>` (mm)
+## Physical layout
 
-**`ardprintf()`** is a custom serial printf that supports `%d`, `%l`, `%f`, `%c`, `%s`. It's also (mis)used to format strings into `buf` for LCD output — but it only prints to `Serial`, not into the buffer. The LCD `distance` line relies on this side effect.
-
-## Switching Motor Drivers
-
-Commented-out sections at the top of the sketch show how to swap to A4988, DRV8834, or DRV8880 drivers — just uncomment the appropriate block and comment out the DRV8825 block.
+Two enclosures are planned:
+- **Top box** (mounted above lathe, visible): LCD, rotary encoder, Forward button, Reverse button
+- **Motor box** (near motor/tailstock end): Start/Stop button only

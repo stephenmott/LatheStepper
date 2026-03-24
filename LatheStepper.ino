@@ -1,326 +1,184 @@
 /*
-   Microstepping demo
+  LatheStepper - Lathe carriage motor control
+  Sieg C0 Z-axis (lead screw) continuous-run controller.
 
-   This requires that microstep control pins be connected in addition to STEP,DIR
+  Controls:
+    Forward button  (A0) - run carriage forward
+    Reverse button  (A1) - run carriage in reverse
+    Start/Stop      (A2) - stop / resume motor (fits a separate box by the motor)
+    Rotary encoder  (2,3) - adjust speed in RPM_STEP increments
 
-   Copyright (C)2015 Laurentiu Badea
-
-   This file may be redistributed under the terms of the MIT license.
-   A copy of this license has been included with this distribution in the file LICENSE.
+  Display (20x4 I2C LCD @ 0x27):
+    Row 0: direction with movement arrows when running
+    Row 1: speed in RPM
+    Row 2: RUNNING / STOPPED status
 */
+
 #include <Arduino.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
-#include "OneButton.h"
-
-LiquidCrystal_I2C lcd(0x27, 20, 4); // set the LCD address to 0x27 for a 16 chars and 2 line display
-
-// Motor steps per revolution. Most steppers are 200 steps or 1.8 degrees/step
-#define MOTOR_STEPS 400
-#define RPM 200
-
-#define DIR 8
-#define STEP 9
-#define ENABLE 4
-#define SLEEP 13 // optional (just delete SLEEP from everywhere if not used)
-
-// Setup a new OneButton on pin A1.
-OneButton button1(A1, true);
-// Setup a new OneButton on pin A2.
-OneButton button2(A2, true);
-// Setup a new OneButton on pin A6.
-OneButton button3(A0, true);
-// Setup a new OneButton on pin A7.
-OneButton button4(A3, true);
-
-#define OneRev 0.9
-
-/*
-   Choose one of the sections below that match your board
-*/
-
-//#include "DRV8834.h"
-//#define M0 10
-//#define M1 11
-//DRV8834 stepper(MOTOR_STEPS, DIR, STEP, SLEEP, M0, M1);
-
-//#include "A4988.h"
-//#define MS1 10
-//#define MS2 11
-//#define MS3 12
-//A4988 stepper(MOTOR_STEPS, DIR, STEP, SLEEP, MS1, MS2, MS3);
-
 #include "DRV8825.h"
-#define MODE0 10
-#define MODE1 11
-#define MODE2 12
-DRV8825 stepper(MOTOR_STEPS, DIR, STEP, ENABLE, MODE0, MODE1, MODE2);
 
-// #include "DRV8880.h"
-// #define M0 10
-// #define M1 11
-// #define TRQ0 6
-// #define TRQ1 7
-// DRV8880 stepper(MOTOR_STEPS, DIR, STEP, SLEEP, M0, M1, TRQ0, TRQ1);
+// ── Motor ──────────────────────────────────────────────────────────────────
+#define MOTOR_STEPS  400    // 0.9°/step NEMA 17
+#define DIR_PIN      8
+#define STEP_PIN     9
+#define ENABLE_PIN   4
+#define MODE0        10
+#define MODE1        11
+#define MODE2        12
 
-// #include "BasicStepperDriver.h" // generic
-// BasicStepperDriver stepper(DIR, STEP);
+// ── Buttons (active-LOW, internal pull-up) ─────────────────────────────────
+#define BTN_FORWARD   A0
+#define BTN_REVERSE   A1
+#define BTN_STARTSTOP A2
 
-int angle = 40; // 0.1 mm
-float distance = 0;
-long aTotal = 0;
+// ── Rotary encoder ─────────────────────────────────────────────────────────
+#define ENC_CLK  2          // must be an interrupt-capable pin
+#define ENC_DT   3
 
-/*
-     =============================================================================
-     %d = signed integer               %f = floating point number
-     %s = string                       %.1f = float to 1 decimal place
-     %c = character                    %.3f = float to 3 decimal places
-     %l = long int
-     =============================================================================
-*/
+// ── Speed limits ───────────────────────────────────────────────────────────
+#define RPM_MIN      10
+#define RPM_MAX     400
+#define RPM_DEFAULT 100
+#define RPM_STEP     10
 
-#define ARDBUFFER 16
+// ── Objects ────────────────────────────────────────────────────────────────
+DRV8825 stepper(MOTOR_STEPS, DIR_PIN, STEP_PIN, ENABLE_PIN, MODE0, MODE1, MODE2);
+LiquidCrystal_I2C lcd(0x27, 20, 4);
 
-int ardprintf(char *str, ...)
-{
-  int i, count = 0, j = 0, flag = 0;
-  char temp[ARDBUFFER + 1];
-  for (i = 0; str[i] != '\0'; i++)  if (str[i] == '%')  count++;
+// ── State ──────────────────────────────────────────────────────────────────
+volatile int encTicks = 0;
+int    rpm     = RPM_DEFAULT;
+bool   running = false;
+int8_t dir     = 1;          // 1 = forward, -1 = reverse
 
-  va_list argv;
-  va_start(argv, count);
-  for (i = 0, j = 0; str[i] != '\0'; i++)
-  {
-    if (str[i] == '%')
-    {
-      temp[j] = '\0';
-      Serial.print(temp);
-      j = 0;
-      temp[0] = '\0';
-
-      switch (str[++i])
-      {
-        case 'd': Serial.print(va_arg(argv, int));
-          break;
-        case 'l': Serial.print(va_arg(argv, long));
-          break;
-        case 'f': Serial.print(va_arg(argv, double));
-          break;
-        case 'c': Serial.print((char)va_arg(argv, int));
-          break;
-        case 's': Serial.print(va_arg(argv, char *));
-          break;
-        default:  ;
-      };
-    }
-    else
-    {
-      temp[j] = str[i];
-      j = (j + 1) % ARDBUFFER;
-      if (j == 0)
-      {
-        temp[ARDBUFFER] = '\0';
-        Serial.print(temp);
-        temp[0] = '\0';
-      }
-    }
-  };
-  Serial.println();
-  return count + 1;
+// ── Encoder ISR ────────────────────────────────────────────────────────────
+void encoderISR() {
+  encTicks += (digitalRead(ENC_DT) != digitalRead(ENC_CLK)) ? 1 : -1;
 }
-void setup() {
 
+// ── Button debounce ────────────────────────────────────────────────────────
+struct Button { uint8_t pin; bool last; unsigned long changed; };
+Button btnFwd = { BTN_FORWARD,   HIGH, 0 };
+Button btnRev = { BTN_REVERSE,   HIGH, 0 };
+Button btnSS  = { BTN_STARTSTOP, HIGH, 0 };
+
+// Returns true once on the falling edge (button press), with 50 ms debounce.
+bool pressed(Button &b) {
+  bool state = digitalRead(b.pin);
+  if (state != b.last && millis() - b.changed > 50) {
+    b.changed = millis();
+    b.last = state;
+    return state == LOW;
+  }
+  return false;
+}
+
+// ── Display ────────────────────────────────────────────────────────────────
+void updateDisplay() {
+  char buf[21];
+
+  // Row 0 – direction label; arrows shown only while running
+  lcd.setCursor(0, 0);
+  sprintf(buf, "%-20s", running
+    ? (dir > 0 ? ">> FORWARD          " : "<< REVERSE          ")
+    : (dir > 0 ? "   FORWARD          " : "   REVERSE          "));
+  lcd.print(buf);
+
+  // Row 1 – speed
+  lcd.setCursor(0, 1);
+  sprintf(buf, "Speed:  %3d RPM     ", rpm);
+  lcd.print(buf);
+
+  // Row 2 – status
+  lcd.setCursor(0, 2);
+  lcd.print(running ? "Status: RUNNING     " : "Status: STOPPED     ");
+
+  // Row 3 – blank
+  lcd.setCursor(0, 3);
+  lcd.print("                    ");
+}
+
+// ── Motor helpers ──────────────────────────────────────────────────────────
+
+// Start (or restart after direction change) continuous rotation.
+void startMotor() {
+  stepper.setRPM(rpm);
+  stepper.enable();
+  // 360000° ≈ 1000 revolutions per block; restarted seamlessly in loop().
+  stepper.startRotate((long)dir * 360000L);
+  running = true;
+  updateDisplay();
+  Serial.print(dir > 0 ? "FORWARD" : "REVERSE");
+  Serial.print(" @ "); Serial.print(rpm); Serial.println(" RPM");
+}
+
+void stopMotor() {
+  stepper.stop();
+  stepper.disable();
+  running = false;
+  updateDisplay();
+  Serial.println("STOPPED");
+}
+
+// ── Setup ──────────────────────────────────────────────────────────────────
+void setup() {
   Serial.begin(9600);
 
-  lcd.init();                      // initialize the lcd
   lcd.init();
   lcd.backlight();
 
-  /*
-     Set target motor RPM.
-  */
-  stepper.begin(RPM);
+  stepper.begin(rpm);
   stepper.setEnableActiveState(LOW);
-  stepper.enable();
-  stepper.setMicrostep(32);   // Set microstep mode to 1:8
+  stepper.setMicrostep(32);
+  stepper.disable();
 
-  // link the button 1 functions.
-  button1.attachClick(click1);
-  button1.attachDoubleClick(doubleclick1);
-  button1.attachLongPressStart(longPressStart1);
-  button1.attachLongPressStop(longPressStop1);
-  button1.attachDuringLongPress(longPress1);
+  pinMode(BTN_FORWARD,   INPUT_PULLUP);
+  pinMode(BTN_REVERSE,   INPUT_PULLUP);
+  pinMode(BTN_STARTSTOP, INPUT_PULLUP);
+  pinMode(ENC_CLK, INPUT_PULLUP);
+  pinMode(ENC_DT,  INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(ENC_CLK), encoderISR, CHANGE);
 
-  // link the button 2 functions.
-  button2.attachClick(click2);
-  button2.attachDoubleClick(doubleclick2);
-  button2.attachLongPressStart(longPressStart2);
-  button2.attachLongPressStop(longPressStop2);
-  button2.attachDuringLongPress(longPress2);
-
-  // link the button 3 functions.
-  button3.attachClick(click3);
-  button3.attachDoubleClick(doubleclick3);
-  button3.attachLongPressStart(longPressStart3);
-  button3.attachLongPressStop(longPressStop3);
-  button3.attachDuringLongPress(longPress3);
-
-  // link the button 4 functions.
-  button4.attachClick(click4);
-  button4.attachDoubleClick(doubleclick4);
-  button4.attachLongPressStart(longPressStart4);
-  button4.attachLongPressStop(longPressStop4);
-  button4.attachDuringLongPress(longPress4);
-
+  updateDisplay();
+  Serial.println("LatheStepper ready.");
 }
 
+// ── Loop ───────────────────────────────────────────────────────────────────
 void loop() {
-  char buf[100];
-  button1.tick();
-  button2.tick();
-  button3.tick();
-  button4.tick();
-  delay(10);
 
-  lcd.setCursor(0, 0);
-  sprintf(buf, "Step Angle : %d", angle);
-  lcd.print(buf);
-  //lcd.print("Step Angle:");
-  //lcd.setCursor(12, 0);
-  //lcd.print(angle);
+  // Keep the motor stepping; restart the next 1000-rev block seamlessly.
+  if (running && stepper.nextAction() == 0) {
+    stepper.startRotate((long)dir * 360000L);
+  }
 
-  float aval = aTotal * (OneRev / 360);
-  lcd.setCursor(0, 1);
-  ardprintf(buf, "Distance   : %.3f", aval);
-  //sprintf(buf, "Distance   : %d.%02d", (int)aval, (int)(aval*100)%100);
-  //strcpy(buf, "Distance   : ");
-  //dtostrf(aval, 2, 2, &buf[strlen(buf)]);
-  lcd.print(buf);
+  // Encoder – adjust speed
+  if (encTicks != 0) {
+    noInterrupts();
+    int ticks = encTicks;
+    encTicks = 0;
+    interrupts();
+    rpm = constrain(rpm + ticks * RPM_STEP, RPM_MIN, RPM_MAX);
+    if (running) stepper.setRPM(rpm);
+    updateDisplay();
+    Serial.print("RPM: "); Serial.println(rpm);
+  }
+
+  // Forward button – set direction and run
+  if (pressed(btnFwd)) {
+    dir = 1;
+    startMotor();
+  }
+
+  // Reverse button – set direction and run
+  if (pressed(btnRev)) {
+    dir = -1;
+    startMotor();
+  }
+
+  // Start/Stop button – toggle
+  if (pressed(btnSS)) {
+    running ? stopMotor() : startMotor();
+  }
 }
-
-// ----- button 1 callback functions
-
-// This function will be called when the button1 was pressed 1 time (and no 2. button press followed).
-void click1() {
-  Serial.println("Button 1 click.");
-  stepper.setEnableActiveState(LOW);
-  stepper.rotate(angle);
-  stepper.setEnableActiveState(HIGH);
-  aTotal += angle;
-} // click1
-
-// This function will be called when the button1 was pressed 2 times in a short timeframe.
-void doubleclick1() {
-  Serial.println("Button 1 doubleclick.");
-  if (angle < 360) {
-    angle++;
-  }
-  aTotal = 0;
-} // doubleclick1
-
-// This function will be called once, when the button1 is pressed for a long time.
-void longPressStart1() {
-  Serial.println("Button 1 longPress start");
-} // longPressStart1
-
-// This function will be called often, while the button1 is pressed for a long time.
-void longPress1() {
-  Serial.println("Button 1 longPress...");
-  stepper.rotate(angle);
-  aTotal += angle;
-} // longPress1
-
-// This function will be called once, when the button1 is released after beeing pressed for a long time.
-void longPressStop1() {
-  Serial.println("Button 1 longPress stop");
-} // longPressStop1
-
-// ... and the same for button 2:
-
-void click2() {
-  Serial.println("Button 2 click.");
-  stepper.rotate((-1)*angle);
-  aTotal -= angle;
-} // click2
-
-void doubleclick2() {
-  Serial.println("Button 2 doubleclick.");
-  if (angle > 1) {
-    angle--;
-  }
-  aTotal = 0;
-} // doubleclick2
-
-void longPressStart2() {
-  Serial.println("Button 2 longPress start");
-} // longPressStart2
-
-void longPress2() {
-  Serial.println("Button 2 longPress...");
-  stepper.rotate((-1)*angle);
-  aTotal -= angle;
-} // longPress2
-
-void longPressStop2() {
-  Serial.println("Button 2 longPress stop");
-} // longPressStop2
-
-// ... and the same for button 3:
-
-void click3() {
-  Serial.println("Button 3 click.");
-  stepper.rotate((-1)*angle);
-  aTotal += angle;
-} // click3
-
-void doubleclick3() {
-  Serial.println("Button 3 doubleclick.");
-  if (angle < 360) {
-    angle++;
-  }
-  aTotal = 0;
-} // doubleclick3
-
-void longPressStart3() {
-  Serial.println("Button 3 longPress start");
-} // longPressStart3
-
-void longPress3() {
-  Serial.println("Button 3 longPress...");
-  stepper.rotate(angle);
-  aTotal += angle;
-} // longPress3
-
-void longPressStop3() {
-  Serial.println("Button 3 longPress stop");
-} // longPressStop3
-
-// ... and the same for button 4:
-
-void click4() {
-  Serial.println("Button 4 click.");
-  stepper.rotate((-1)*angle);
-  aTotal -= angle;
-} // click4
-
-void doubleclick4() {
-  Serial.println("Button 4 doubleclick.");
-  if (angle > 1) {
-    angle--;
-  }
-  aTotal = 0;
-} // doubleclick4
-
-void longPressStart4() {
-  Serial.println("Button 4 longPress start");
-} // longPressStart4
-
-void longPress4() {
-  Serial.println("Button 4 longPress...");
-  stepper.rotate((-1)*angle);
-  aTotal -= angle;
-} // longPress4
-
-void longPressStop4() {
-  Serial.println("Button 4 longPress stop");
-} // longPressStop4
