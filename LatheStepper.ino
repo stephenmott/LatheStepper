@@ -2,24 +2,26 @@
   LatheStepper v2  —  Positional lathe carriage controller
   Sieg C0 Z-axis lead screw, Raspberry Pi Pico W + TMC2100
 
-  Board:  Raspberry Pi Pico W — arduino-pico core v4.4.0 (NOT Arduino Mbed OS RP2040).
-          ⚠ Do not upgrade core past v4.4.0 — v5.x has a known Pico W linker bug.
+  Board:  Raspberry Pi Pico W — arduino-pico core (Earle Philhower, NOT Arduino Mbed OS RP2040).
   Driver: TMC2100, CFG pins hardwired on module (not driven by Pico).
           Update MICROSTEPS below to match CFG1/CFG2 setting if known.
 
-  Pins:
-    GP0/GP1   LCD SDA/SCL (I2C0)
-    GP2       Forward button           (INPUT_PULLUP)
-    GP3       Reverse button           (INPUT_PULLUP)
-    GP4       Start/Stop — remote box  (INPUT_PULLUP)
-    GP5/GP6   Jog encoder CLK/DT      (enc2 — jogs carriage during setup)
-    GP7       Jog encoder SW           (press to set home, then limit)
-    GP8/GP9   Speed encoder CLK/DT    (enc1 — adjusts cut/rapid RPM)
-    GP10–12   (free)
-    GP13      ENABLE (active LOW)
-    GP14/15   DIR / STEP
-  Note: GP13–15 are at the bottom of the Pico left edge (USB at top),
-        placing the motor signals physically close to the TMC2100.
+  Pins (Pico mounted USB-up; GP0 = top of left edge, GP15 = bottom):
+    GP0/GP1   LCD SDA/SCL (I2C0)                       ┐ 3-pin JST: SDA,SCL,GND
+    GP2       Forward button  (INPUT_PULLUP)             ┐ 3-pin JST: GND,FWD,REV
+    GP3       Reverse button  (INPUT_PULLUP)             ┘   (GND pin is above GP2)
+    GP4       ENC2 VCC (OUTPUT HIGH — encoder supply)    ┐
+    GP5       Jog enc CLK     (interrupt)                 │ 5-pin JST: VCC,CLK,GND,DT,SW
+    GP6       Jog enc DT                                  │   (GND pin between GP5 and GP6)
+    GP7       Jog enc SW      (INPUT_PULLUP)              ┘
+    GP8       Speed enc CLK   (interrupt)                 ┐
+    GP9       Speed enc DT                                 │ 4-pin JST: CLK,DT,GND,VCC
+    GP10      ENC1 VCC (OUTPUT HIGH — encoder supply)     ┘   (GND pin between GP9 and GP10)
+    GP11      Start/Stop — remote box (INPUT_PULLUP)      2-pin twisted pair to motor box
+    GP12      (free)
+    GP13      ENABLE (active LOW)                         ┐
+    GP14      DIR                                          │ short jumpers to TMC2100
+    GP15      STEP                                         ┘
 
   Session setup (required after each power-on):
     1. Startup screen — enc1 adjusts cut RPM, enc2 adjusts rapid RPM.
@@ -52,13 +54,15 @@
 #define PIN_LCD_SCL    1
 #define PIN_BTN_FWD    2    // resume cut (also: confirm startup)
 #define PIN_BTN_REV    3    // return home after e-stop
-#define PIN_BTN_SS     4    // Start/Stop — remote box
-#define PIN_ENC2_CLK   5    // jog encoder
-#define PIN_ENC2_DT    6
-#define PIN_ENC2_SW    7    // set home (first press), then limit (second press)
-#define PIN_ENC1_CLK   8    // speed encoder
-#define PIN_ENC1_DT    9
-// GP10–GP12 free
+#define PIN_ENC2_VCC   4    // OUTPUT HIGH — supplies encoder 2 VCC via 5-pin JST
+#define PIN_ENC2_CLK   5    // jog encoder CLK (interrupt)
+#define PIN_ENC2_DT    6    // jog encoder DT
+#define PIN_ENC2_SW    7    // jog encoder SW: set home (first press), then limit (second press)
+#define PIN_ENC1_CLK   8    // speed encoder CLK (interrupt)
+#define PIN_ENC1_DT    9    // speed encoder DT
+#define PIN_ENC1_VCC  10    // OUTPUT HIGH — supplies encoder 1 VCC via 4-pin JST
+#define PIN_BTN_SS    11    // Start/Stop — remote box, twisted pair
+// GP12 free
 #define PIN_ENABLE    13    // active LOW — bottom of Pico left edge, close to TMC2100
 #define PIN_DIR       14
 #define PIN_STEP      15
@@ -304,6 +308,10 @@ void setup() {
   stepper.begin(cutRPM, MICROSTEPS);
   stepper.setEnableActiveState(LOW);
   stepper.disable();
+
+  // GPIO pins used as encoder VCC rails (encoders draw ~1 mA — well within 12 mA limit).
+  pinMode(PIN_ENC2_VCC, OUTPUT); digitalWrite(PIN_ENC2_VCC, HIGH);
+  pinMode(PIN_ENC1_VCC, OUTPUT); digitalWrite(PIN_ENC1_VCC, HIGH);
 
   pinMode(PIN_BTN_FWD,  INPUT_PULLUP);
   pinMode(PIN_BTN_REV,  INPUT_PULLUP);

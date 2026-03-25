@@ -51,13 +51,15 @@ All logic runs at 3.3V — fully compatible with TMC2100 logic inputs. GP0–GP1
 | GP1 | LCD SCL (I2C0) |
 | GP2 | Forward button |
 | GP3 | Reverse button |
-| GP4 | Start/Stop button (remote box near motor) |
+| GP4 | Enc2 VCC (OUTPUT HIGH — supplies jog encoder ~1 mA) |
 | GP5 | Jog encoder CLK (interrupt) |
 | GP6 | Jog encoder DT |
 | GP7 | Jog encoder SW (push button — set home / set limit) |
 | GP8 | Speed encoder CLK (interrupt) |
 | GP9 | Speed encoder DT |
-| GP10–GP12 | (free) |
+| GP10 | Enc1 VCC (OUTPUT HIGH — supplies speed encoder ~1 mA) |
+| GP11 | Start/Stop button (remote, twisted pair to motor box) |
+| GP12 | (free) |
 | GP13 | ENABLE (active LOW) |
 | GP14 | DIR |
 | GP15 | STEP |

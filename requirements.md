@@ -45,18 +45,22 @@ The Pico is mounted with **USB pointing up and off the board edge** so it can be
 | GP1 | LCD SCL | I2C0 hardware |
 | GP2 | Forward button | INPUT_PULLUP, LOW = pressed |
 | GP3 | Reverse button | INPUT_PULLUP, LOW = pressed |
-| GP4 | Start/Stop button | INPUT_PULLUP, LOW = pressed — remote box |
+| GP4 | Enc2 VCC | OUTPUT HIGH — supplies 3.3 V to jog encoder (~1 mA) |
 | GP5 | Jog encoder CLK | Interrupt |
 | GP6 | Jog encoder DT | |
 | GP7 | Jog encoder SW | INPUT_PULLUP — press to set home, then limit |
 | GP8 | Speed encoder CLK | Interrupt |
 | GP9 | Speed encoder DT | |
-| GP10–GP12 | (free) | |
+| GP10 | Enc1 VCC | OUTPUT HIGH — supplies 3.3 V to speed encoder (~1 mA) |
+| GP11 | Start/Stop button | INPUT_PULLUP, LOW = pressed — remote box (twisted pair) |
+| GP12 | (free) | |
 | GP13 | ENABLE | Active LOW — bottom of left edge, close to TMC2100 |
 | GP14 | DIR | TMC2100 direction |
 | GP15 | STEP | TMC2100 step |
 
 GP0–GP15 all sit on the left-hand edge of the Pico.
+
+**Why GPIO for encoder VCC?** The left edge of the Pico has no VCC pins — only GNDs at physical positions 3, 8, 13, 17. Using a GPIO pin set OUTPUT HIGH avoids routing a wire to the right-edge 3V3 pin. A rotary encoder draws ~1 mA (just the internal pull-up resistors), well within the 12 mA GPIO source limit.
 
 **TMC2100 CFG pin wiring (on driver module, not Pico):**
 
@@ -81,11 +85,11 @@ Update `MICROSTEPS` in the sketch to match whatever CFG1/CFG2 are set to.
                       Raspberry Pi Pico W
                     ┌──────────────────────┐
               GP0 ──┤ LCD SDA        VBUS  ├── (USB 5V)
-              GP1 ──┤ LCD SCL        VSYS  ├── 5V power in
+              GP1 ──┤ LCD SCL        VSYS  ├── 5V power in → LCD VCC
               GND ──┤ GND             GND  ├──
-              GP2 ──┤ Forward btn     3V3  ├── 3.3V out → encoder +
+              GP2 ──┤ Forward btn     3V3  ├── (free)
               GP3 ──┤ Reverse btn  3V3_EN  ├──
-              GP4 ──┤ Start/Stop btn GP28  ├── (free)
+              GP4 ──┤ ENC2 VCC*      GP28  ├── (free)
               GP5 ──┤ ENC2 CLK       GP27  ├── (free)
               GND ──┤ GND            GP26  ├── (free)
               GP6 ──┤ ENC2 DT         RUN  ├──
@@ -93,8 +97,8 @@ Update `MICROSTEPS` in the sketch to match whatever CFG1/CFG2 are set to.
               GP8 ──┤ ENC1 CLK        GND  ├──
               GP9 ──┤ ENC1 DT        GP21  ├── (free)
               GND ──┤ GND            GP20  ├── (free)
-             GP10 ──┤ (free)         GP19  ├── (free)
-             GP11 ──┤ (free)         GP18  ├── (free)
+             GP10 ──┤ ENC1 VCC*      GP19  ├── (free)
+             GP11 ──┤ Start/Stop btn GP18  ├── (free)
              GP12 ──┤ (free)          GND  ├──
              GP13 ──┤ ENABLE         GP17  ├── (free)
               GND ──┤ GND            GP16  ├── (free)
@@ -102,13 +106,29 @@ Update `MICROSTEPS` in the sketch to match whatever CFG1/CFG2 are set to.
                     └──────────────────────┘
   TMC2100 ↓ (short jumpers to GP13/14/15)
 
+* GP4 and GP10 are set OUTPUT HIGH in firmware — they supply ~3.3 V to encoder VCC.
+  Encoders draw ~1 mA each, within the 12 mA GPIO source limit.
+
 TMC2100:  ENABLE←GP13, DIR←GP14, STEP←GP15
           CFG1/CFG2/CFG3 hardwired on module (see CFG table above)
 Buttons:  one leg to pin, other leg to GND  (INPUT_PULLUP, no resistor needed)
-Enc1:     CLK→GP8,  DT→GP9,  GND→GND, +→3V3              (speed)
-Enc2:     CLK→GP5,  DT→GP6,  SW→GP7,  GND→GND, +→3V3     (jog + set home/limit)
-LCD:      SDA→GP0,  SCL→GP1, GND→GND, VCC→5V (VSYS)
+Enc1:     CLK→GP8,  DT→GP9,  GND→GND, VCC→GP10*           (speed)
+Enc2:     CLK→GP5,  DT→GP6,  SW→GP7,  GND→GND, VCC→GP4*  (jog + set home/limit)
+LCD:      SDA→GP0,  SCL→GP1, GND→GND, VCC→VSYS (5V, right edge)
 ```
+
+### JST connector groups (protoboard, left edge of Pico)
+
+JST connectors soldered to the protoboard next to the Pico. The Pico left edge has GND pins at physical positions 3, 8, 13, 17 — the groups below exploit these.
+
+| Connector | Pins (physical order) | Wires |
+|-----------|----------------------|-------|
+| **LCD** (4-pin) | GND · SDA · SCL · VCC | GND from pin 3; SDA=GP0; SCL=GP1; VCC from VSYS via protoboard trace |
+| **FWD+REV** (3-pin) | GND · FWD · REV | GND=pin 3; FWD=GP2; REV=GP3 |
+| **ENC2** (5-pin) | VCC · CLK · GND · DT · SW | VCC=GP4; CLK=GP5; GND=pin 8; DT=GP6; SW=GP7 |
+| **ENC1** (4-pin) | CLK · DT · GND · VCC | CLK=GP8; DT=GP9; GND=pin 13; VCC=GP10 |
+| **SS remote** (2-pin) | SS · GND | GP11 + any GND; twisted pair to motor box |
+| **Motor** (3 jumpers) | ENABLE · DIR · STEP | GP13 · GP14 · GP15 → TMC2100 |
 
 ---
 
