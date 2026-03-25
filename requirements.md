@@ -41,8 +41,8 @@ The Pico is mounted with **USB pointing up and off the board edge** so it can be
 
 | Pin | Function | Notes |
 |-----|----------|-------|
-| GP0 | LCD SDA | I2C0 hardware |
-| GP1 | LCD SCL | I2C0 hardware |
+| GP0 | DIR | TMC2100 direction — hard-wired |
+| GP1 | STEP | TMC2100 step — hard-wired |
 | GP2 | Forward button | INPUT_PULLUP, LOW = pressed |
 | GP3 | Reverse button | INPUT_PULLUP, LOW = pressed |
 | GP4 | Enc2 VCC | OUTPUT HIGH — supplies 3.3 V to jog encoder (~1 mA) |
@@ -54,11 +54,13 @@ The Pico is mounted with **USB pointing up and off the board edge** so it can be
 | GP10 | Enc1 VCC | OUTPUT HIGH — supplies 3.3 V to speed encoder (~1 mA) |
 | GP11 | Start/Stop button | INPUT_PULLUP, LOW = pressed — remote box (twisted pair) |
 | GP12 | (free) | |
-| GP13 | ENABLE | Active LOW — bottom of left edge, close to TMC2100 |
-| GP14 | DIR | TMC2100 direction |
-| GP15 | STEP | TMC2100 step |
+| GP13 | ENABLE | Active LOW — hard-wired to TMC2100 |
+| GP14 | LCD SDA | I2C1 hardware (Wire1) — as physically wired |
+| GP15 | LCD SCL | I2C1 hardware (Wire1) — as physically wired |
 
 GP0–GP15 all sit on the left-hand edge of the Pico.
+
+**Why GP14/GP15 for LCD use Wire1, not Wire?** The RP2040 has two I2C hardware blocks. Each is fixed to specific pins in a repeating pattern: I2C0 covers GP0/1, GP4/5, GP8/9, GP12/13; I2C1 covers GP2/3, GP6/7, GP10/11, GP14/15. The `LiquidCrystal_I2C` library has been patched to accept an optional `TwoWire&` parameter (defaulting to `Wire`) so passing `Wire1` routes it to I2C1.
 
 **Why GPIO for encoder VCC?** The left edge of the Pico has no VCC pins — only GNDs at physical positions 3, 8, 13, 17. Using a GPIO pin set OUTPUT HIGH avoids routing a wire to the right-edge 3V3 pin. A rotary encoder draws ~1 mA (just the internal pull-up resistors), well within the 12 mA GPIO source limit.
 
@@ -84,8 +86,8 @@ Update `MICROSTEPS` in the sketch to match whatever CFG1/CFG2 are set to.
   USB ↑ (off board edge)
                       Raspberry Pi Pico W
                     ┌──────────────────────┐
-              GP0 ──┤ LCD SDA        VBUS  ├── (USB 5V)
-              GP1 ──┤ LCD SCL        VSYS  ├── 5V power in → LCD VCC
+              GP0 ──┤ DIR            VBUS  ├── (USB 5V)
+              GP1 ──┤ STEP           VSYS  ├── 5V power in → LCD VCC
               GND ──┤ GND             GND  ├──
               GP2 ──┤ Forward btn     3V3  ├── (free)
               GP3 ──┤ Reverse btn  3V3_EN  ├──
@@ -102,19 +104,18 @@ Update `MICROSTEPS` in the sketch to match whatever CFG1/CFG2 are set to.
              GP12 ──┤ (free)          GND  ├──
              GP13 ──┤ ENABLE         GP17  ├── (free)
               GND ──┤ GND            GP16  ├── (free)
-             GP14 ──┤ DIR            GP15  ├── STEP
+             GP14 ──┤ LCD SDA        GP15  ├── LCD SCL
                     └──────────────────────┘
-  TMC2100 ↓ (short jumpers to GP13/14/15)
 
 * GP4 and GP10 are set OUTPUT HIGH in firmware — they supply ~3.3 V to encoder VCC.
   Encoders draw ~1 mA each, within the 12 mA GPIO source limit.
 
-TMC2100:  ENABLE←GP13, DIR←GP14, STEP←GP15
+TMC2100:  ENABLE←GP13, DIR←GP0, STEP←GP1
           CFG1/CFG2/CFG3 hardwired on module (see CFG table above)
 Buttons:  one leg to pin, other leg to GND  (INPUT_PULLUP, no resistor needed)
 Enc1:     CLK→GP8,  DT→GP9,  GND→GND, VCC→GP10*           (speed)
 Enc2:     CLK→GP5,  DT→GP6,  SW→GP7,  GND→GND, VCC→GP4*  (jog + set home/limit)
-LCD:      SDA→GP0,  SCL→GP1, GND→GND, VCC→VSYS (5V, right edge)
+LCD:      SDA→GP14, SCL→GP15, GND→GND, VCC→VSYS (5V, right edge)  [uses Wire1 / I2C1]
 ```
 
 ### JST connector groups (protoboard, left edge of Pico)
@@ -123,7 +124,7 @@ JST connectors soldered to the protoboard next to the Pico. The Pico left edge h
 
 | Connector | Pins (physical order) | Wires |
 |-----------|----------------------|-------|
-| **LCD** (4-pin) | GND · SDA · SCL · VCC | GND from pin 3; SDA=GP0; SCL=GP1; VCC from VSYS via protoboard trace |
+| **LCD** (4-pin) | GND · SDA · SCL · VCC | GND=pin 17; SDA=GP14; SCL=GP15; VCC from VSYS via protoboard trace |
 | **FWD+REV** (3-pin) | GND · FWD · REV | GND=pin 3; FWD=GP2; REV=GP3 |
 | **ENC2** (5-pin) | VCC · CLK · GND · DT · SW | VCC=GP4; CLK=GP5; GND=pin 8; DT=GP6; SW=GP7 |
 | **ENC1** (4-pin) | CLK · DT · GND · VCC | CLK=GP8; DT=GP9; GND=pin 13; VCC=GP10 |

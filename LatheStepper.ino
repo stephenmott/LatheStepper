@@ -7,21 +7,22 @@
           Update MICROSTEPS below to match CFG1/CFG2 setting if known.
 
   Pins (Pico mounted USB-up; GP0 = top of left edge, GP15 = bottom):
-    GP0/GP1   LCD SDA/SCL (I2C0)                       ┐ 3-pin JST: SDA,SCL,GND
+    GP0       DIR  → TMC2100 (hard-wired)
+    GP1       STEP → TMC2100 (hard-wired)
     GP2       Forward button  (INPUT_PULLUP)             ┐ 3-pin JST: GND,FWD,REV
     GP3       Reverse button  (INPUT_PULLUP)             ┘   (GND pin is above GP2)
     GP4       ENC2 VCC (OUTPUT HIGH — encoder supply)    ┐
     GP5       Jog enc CLK     (interrupt)                 │ 5-pin JST: VCC,CLK,GND,DT,SW
-    GP6       Jog enc DT                                  │   (GND pin between GP5 and GP6)
+    GP6       Jog enc DT                                  │   (GND between GP5 and GP6)
     GP7       Jog enc SW      (INPUT_PULLUP)              ┘
     GP8       Speed enc CLK   (interrupt)                 ┐
     GP9       Speed enc DT                                 │ 4-pin JST: CLK,DT,GND,VCC
-    GP10      ENC1 VCC (OUTPUT HIGH — encoder supply)     ┘   (GND pin between GP9 and GP10)
+    GP10      ENC1 VCC (OUTPUT HIGH — encoder supply)     ┘   (GND between GP9 and GP10)
     GP11      Start/Stop — remote box (INPUT_PULLUP)      2-pin twisted pair to motor box
     GP12      (free)
-    GP13      ENABLE (active LOW)                         ┐
-    GP14      DIR                                          │ short jumpers to TMC2100
-    GP15      STEP                                         ┘
+    GP13      ENABLE → TMC2100 (active LOW, hard-wired)
+    GP14      LCD SDA (I2C1 / Wire1) — as physically wired ┐ 4-pin JST: GND,SDA,SCL,VCC
+    GP15      LCD SCL (I2C1 / Wire1)                        ┘
 
   Session setup (required after each power-on):
     1. Startup screen — enc1 adjusts cut RPM, enc2 adjusts rapid RPM.
@@ -50,8 +51,8 @@
 #include <EEPROM.h>
 
 // ── Pins ──────────────────────────────────────────────────────────────────────
-#define PIN_LCD_SDA    0
-#define PIN_LCD_SCL    1
+#define PIN_DIR        0    // TMC2100 — hard-wired, can reach anywhere on board
+#define PIN_STEP       1    // TMC2100
 #define PIN_BTN_FWD    2    // resume cut (also: confirm startup)
 #define PIN_BTN_REV    3    // return home after e-stop
 #define PIN_ENC2_VCC   4    // OUTPUT HIGH — supplies encoder 2 VCC via 5-pin JST
@@ -63,9 +64,9 @@
 #define PIN_ENC1_VCC  10    // OUTPUT HIGH — supplies encoder 1 VCC via 4-pin JST
 #define PIN_BTN_SS    11    // Start/Stop — remote box, twisted pair
 // GP12 free
-#define PIN_ENABLE    13    // active LOW — bottom of Pico left edge, close to TMC2100
-#define PIN_DIR       14
-#define PIN_STEP      15
+#define PIN_ENABLE    13    // active LOW
+#define PIN_LCD_SDA   14    // I2C1 — as physically wired
+#define PIN_LCD_SCL   15    // I2C1
 
 // ── Motor ─────────────────────────────────────────────────────────────────────
 #define MOTOR_STEPS    400     // 0.9°/step NEMA 17
@@ -100,7 +101,7 @@ const float STEPS_PER_MM = (float)(MOTOR_STEPS * MICROSTEPS) / LEADSCREW_MM;
 
 // ── Objects ───────────────────────────────────────────────────────────────────
 TMC2100           stepper(MOTOR_STEPS, PIN_DIR, PIN_STEP, PIN_ENABLE);
-LiquidCrystal_I2C lcd(0x27, 20, 4);
+LiquidCrystal_I2C lcd(0x27, 20, 4, Wire1);  // GP14/GP15 = I2C1
 
 // ── State machine ─────────────────────────────────────────────────────────────
 enum State : uint8_t {
@@ -299,9 +300,9 @@ void updateDisplay() {
 void setup() {
   Serial.begin(9600);
 
-  // Pico I2C0 defaults to GP4/GP5 — override to our wiring (GP0/GP1).
-  Wire.setSDA(PIN_LCD_SDA);
-  Wire.setSCL(PIN_LCD_SCL);
+  // LCD is on GP14/GP15 = I2C1 (Wire1).
+  Wire1.setSDA(PIN_LCD_SDA);
+  Wire1.setSCL(PIN_LCD_SCL);
   lcd.init();
   lcd.backlight();
 

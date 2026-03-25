@@ -47,8 +47,8 @@ All logic runs at 3.3V — fully compatible with TMC2100 logic inputs. GP0–GP1
 
 | Pin | Function |
 |-----|----------|
-| GP0 | LCD SDA (I2C0) |
-| GP1 | LCD SCL (I2C0) |
+| GP0 | DIR (TMC2100, hard-wired) |
+| GP1 | STEP (TMC2100, hard-wired) |
 | GP2 | Forward button |
 | GP3 | Reverse button |
 | GP4 | Enc2 VCC (OUTPUT HIGH — supplies jog encoder ~1 mA) |
@@ -60,9 +60,9 @@ All logic runs at 3.3V — fully compatible with TMC2100 logic inputs. GP0–GP1
 | GP10 | Enc1 VCC (OUTPUT HIGH — supplies speed encoder ~1 mA) |
 | GP11 | Start/Stop button (remote, twisted pair to motor box) |
 | GP12 | (free) |
-| GP13 | ENABLE (active LOW) |
-| GP14 | DIR |
-| GP15 | STEP |
+| GP13 | ENABLE (active LOW, hard-wired to TMC2100) |
+| GP14 | LCD SDA (I2C1 / Wire1) |
+| GP15 | LCD SCL (I2C1 / Wire1) |
 
 LCD: I2C address `0x27`, 20×4 characters.
 Motor: 400 steps/rev (0.9°/step), leadscrew M8 × 1.5 mm pitch → 4267 steps/mm at 16× microstep.
