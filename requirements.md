@@ -41,10 +41,10 @@ The Pico is mounted with **USB pointing up and off the board edge** so it can be
 
 | Pin | Function | Notes |
 |-----|----------|-------|
-| GP0 | DIR | TMC2100 direction — hard-wired |
-| GP1 | Start/Stop button | INPUT_PULLUP, LOW = pressed — remote box (twisted pair) |
-| GP2 | Forward button | INPUT_PULLUP, LOW = pressed |
-| GP3 | Reverse button | INPUT_PULLUP, LOW = pressed |
+| GP0 | Forward button | INPUT_PULLUP, LOW = pressed |
+| GP1 | Reverse button | INPUT_PULLUP, LOW = pressed |
+| GP2 | Start/Stop button | INPUT_PULLUP, LOW = pressed — remote box (twisted pair) |
+| GP3 | DIR | TMC2100 direction — hard-wired |
 | GP4 | Enc2 VCC | OUTPUT HIGH — supplies 3.3 V to jog encoder (~1 mA) |
 | GP5 | Jog encoder CLK | Interrupt |
 | GP6 | Jog encoder DT | |
@@ -86,11 +86,11 @@ Update `MICROSTEPS` in the sketch to match whatever CFG1/CFG2 are set to.
   USB ↑ (off board edge)
                       Raspberry Pi Pico W
                     ┌──────────────────────┐
-              GP0 ──┤ DIR            VBUS  ├── (USB 5V)
-              GP1 ──┤ Start/Stop btn VSYS  ├── 5V power in → LCD VCC
+              GP0 ──┤ Forward btn    VBUS  ├── (USB 5V)
+              GP1 ──┤ Reverse btn    VSYS  ├── 5V power in → LCD VCC
               GND ──┤ GND             GND  ├──
-              GP2 ──┤ Forward btn  3V3_EN  ├──
-              GP3 ──┤ Reverse btn     3V3  ├── (free)
+              GP2 ──┤ Start/Stop btn 3V3_EN├──
+              GP3 ──┤ DIR             3V3  ├── (free)
               GP4 ──┤ ENC2 VCC*  ADC_VREF  ├──
               GP5 ──┤ ENC2 CLK       GP28  ├── (free)
               GND ──┤ GND             GND  ├──
@@ -111,7 +111,7 @@ Update `MICROSTEPS` in the sketch to match whatever CFG1/CFG2 are set to.
 * GP4 and GP10 are set OUTPUT HIGH in firmware — they supply ~3.3 V to encoder VCC.
   Encoders draw ~1 mA each, within the 12 mA GPIO source limit.
 
-TMC2100:  ENABLE←GP13, DIR←GP0, STEP←GP1
+TMC2100:  ENABLE←GP13, DIR←GP3, STEP←GP11
           CFG1/CFG2/CFG3 hardwired on module (see CFG table above)
 Buttons:  one leg to pin, other leg to GND  (INPUT_PULLUP, no resistor needed)
 Enc1:     CLK→GP8,  DT→GP9,  GND→GND, VCC→GP10*           (speed)
@@ -126,10 +126,10 @@ JST connectors soldered to the protoboard next to the Pico. The Pico left edge h
 | Connector | Pins (physical order) | Wires |
 |-----------|----------------------|-------|
 | **LCD** (4-pin) | GND · SDA · SCL · VCC | GND=pin 17; SDA=GP14; SCL=GP15; VCC from VSYS via protoboard trace |
-| **Buttons** (4-pin) | SS · GND · FWD · REV | SS=GP1; GND=pin 3; FWD=GP2; REV=GP3 |
+| **Buttons** (4-pin) | FWD · REV · GND · SS | FWD=GP0; REV=GP1; GND=pin 3; SS=GP2 |
 | **ENC2** (5-pin) | VCC · CLK · GND · DT · SW | VCC=GP4; CLK=GP5; GND=pin 8; DT=GP6; SW=GP7 |
 | **ENC1** (4-pin) | CLK · DT · GND · VCC | CLK=GP8; DT=GP9; GND=pin 13; VCC=GP10 |
-| **Motor** (3 jumpers) | DIR · STEP · ENABLE | GP0 · GP11 · GP13 → TMC2100 |
+| **Motor** (3 jumpers) | DIR · STEP · ENABLE | GP3 · GP11 · GP13 → TMC2100 |
 
 ---
 

@@ -7,10 +7,10 @@
           Update MICROSTEPS below to match CFG1/CFG2 setting if known.
 
   Pins (Pico mounted USB-up; GP0 = top of left edge, GP15 = bottom):
-    GP0       DIR  → TMC2100 (hard-wired)
-    GP1       Start/Stop — remote box (INPUT_PULLUP)     ┐ 4-pin JST: SS,GND,FWD,REV
-    GP2       Forward button  (INPUT_PULLUP)              │   (GND pin between GP1 and GP2)
-    GP3       Reverse button  (INPUT_PULLUP)             ┘
+    GP0       Forward button  (INPUT_PULLUP)              ┐ 4-pin JST: FWD,REV,GND,SS
+    GP1       Reverse button  (INPUT_PULLUP)              │   (GND pin between GP1 and GP2)
+    GP2       Start/Stop — remote box (INPUT_PULLUP)     ┘
+    GP3       DIR  → TMC2100 (hard-wired)
     GP4       ENC2 VCC (OUTPUT HIGH — encoder supply)    ┐
     GP5       Jog enc CLK     (interrupt)                 │ 5-pin JST: VCC,CLK,GND,DT,SW
     GP6       Jog enc DT                                  │   (GND between GP5 and GP6)
@@ -51,10 +51,10 @@
 #include <EEPROM.h>
 
 // ── Pins ──────────────────────────────────────────────────────────────────────
-#define PIN_DIR        0    // TMC2100 — hard-wired, can reach anywhere on board
-#define PIN_BTN_SS     1    // Start/Stop — remote box, twisted pair  ┐ 4-pin JST:
-#define PIN_BTN_FWD    2    // resume cut (also: confirm startup)      │ SS,GND,FWD,REV
-#define PIN_BTN_REV    3    // return home after e-stop               ┘ (GND at pin 3)
+#define PIN_BTN_FWD    0    // resume cut (also: confirm startup)      ┐ 4-pin JST:
+#define PIN_BTN_REV    1    // return home after e-stop               │ FWD,REV,GND,SS
+#define PIN_BTN_SS     2    // Start/Stop — remote box, twisted pair  ┘ (GND at pin 3)
+#define PIN_DIR        3    // TMC2100 — hard-wired, can reach anywhere on board
 #define PIN_ENC2_VCC   4    // OUTPUT HIGH — supplies encoder 2 VCC via 5-pin JST
 #define PIN_ENC2_CLK   5    // jog encoder CLK (interrupt)
 #define PIN_ENC2_DT    6    // jog encoder DT

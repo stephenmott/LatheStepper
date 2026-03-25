@@ -47,10 +47,10 @@ All logic runs at 3.3V — fully compatible with TMC2100 logic inputs. GP0–GP1
 
 | Pin | Function |
 |-----|----------|
-| GP0 | DIR (TMC2100, hard-wired) |
-| GP1 | Start/Stop button (remote, twisted pair to motor box) |
-| GP2 | Forward button |
-| GP3 | Reverse button |
+| GP0 | Forward button |
+| GP1 | Reverse button |
+| GP2 | Start/Stop button (remote, twisted pair to motor box) |
+| GP3 | DIR (TMC2100, hard-wired) |
 | GP4 | Enc2 VCC (OUTPUT HIGH — supplies jog encoder ~1 mA) |
 | GP5 | Jog encoder CLK (interrupt) |
 | GP6 | Jog encoder DT |
