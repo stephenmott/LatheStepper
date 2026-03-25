@@ -2,13 +2,16 @@
   LatheStepper - Lathe carriage motor control
   Sieg C0 Z-axis (lead screw) continuous-run controller.
 
-  Controls:
-    Forward button  (A0) - run carriage forward
-    Reverse button  (A1) - run carriage in reverse
-    Start/Stop      (A2) - stop / resume motor (fits a separate box by the motor)
-    Rotary encoder  (2,3) - adjust speed in RPM_STEP increments
+  Board: Raspberry Pi Pico (RP2040)
+         arduino-pico core — GP pin numbers used directly.
 
-  Display (20x4 I2C LCD @ 0x27):
+  Controls:
+    Forward button  (GP10) - run carriage forward
+    Reverse button  (GP11) - run carriage in reverse
+    Start/Stop      (GP12) - stop / resume motor (fits a separate box by the motor)
+    Rotary encoder  (GP8, GP9) - adjust speed in RPM_STEP increments
+
+  Display (20x4 I2C LCD @ 0x27, I2C0 on GP0/GP1):
     Row 0: direction with movement arrows when running
     Row 1: speed in RPM
     Row 2: RUNNING / STOPPED status
@@ -21,21 +24,21 @@
 
 // ── Motor ──────────────────────────────────────────────────────────────────
 #define MOTOR_STEPS  400    // 0.9°/step NEMA 17
-#define DIR_PIN      8
-#define STEP_PIN     9
-#define ENABLE_PIN   4
-#define MODE0        10
-#define MODE1        11
-#define MODE2        12
+#define DIR_PIN      3
+#define STEP_PIN     4
+#define ENABLE_PIN   2
+#define MODE0        5
+#define MODE1        6
+#define MODE2        7
 
 // ── Buttons (active-LOW, internal pull-up) ─────────────────────────────────
-#define BTN_FORWARD   A0
-#define BTN_REVERSE   A1
-#define BTN_STARTSTOP A2
+#define BTN_FORWARD   10
+#define BTN_REVERSE   11
+#define BTN_STARTSTOP 12
 
 // ── Rotary encoder ─────────────────────────────────────────────────────────
-#define ENC_CLK  2          // must be an interrupt-capable pin
-#define ENC_DT   3
+#define ENC_CLK  8          // all Pico GPIO pins are interrupt-capable
+#define ENC_DT   9
 
 // ── Speed limits ───────────────────────────────────────────────────────────
 #define RPM_MIN      10
@@ -53,19 +56,21 @@ int    rpm     = RPM_DEFAULT;
 bool   running = false;
 int8_t dir     = 1;          // 1 = forward, -1 = reverse
 
+// ── Button debounce ────────────────────────────────────────────────────────
+// Struct must be declared before any functions to avoid Arduino preprocessor
+// inserting auto-prototypes before the type is defined.
+struct DebouncedBtn { uint8_t pin; bool last; unsigned long changed; };
+DebouncedBtn btnFwd = { BTN_FORWARD,   HIGH, 0 };
+DebouncedBtn btnRev = { BTN_REVERSE,   HIGH, 0 };
+DebouncedBtn btnSS  = { BTN_STARTSTOP, HIGH, 0 };
+
 // ── Encoder ISR ────────────────────────────────────────────────────────────
 void encoderISR() {
   encTicks += (digitalRead(ENC_DT) != digitalRead(ENC_CLK)) ? 1 : -1;
 }
 
-// ── Button debounce ────────────────────────────────────────────────────────
-struct Button { uint8_t pin; bool last; unsigned long changed; };
-Button btnFwd = { BTN_FORWARD,   HIGH, 0 };
-Button btnRev = { BTN_REVERSE,   HIGH, 0 };
-Button btnSS  = { BTN_STARTSTOP, HIGH, 0 };
-
 // Returns true once on the falling edge (button press), with 50 ms debounce.
-bool pressed(Button &b) {
+bool pressed(DebouncedBtn &b) {
   bool state = digitalRead(b.pin);
   if (state != b.last && millis() - b.changed > 50) {
     b.changed = millis();
@@ -126,6 +131,9 @@ void stopMotor() {
 void setup() {
   Serial.begin(9600);
 
+  // Pico I2C0 defaults to GP4/GP5 — override to our wiring (GP0/GP1).
+  Wire.setSDA(0);
+  Wire.setSCL(1);
   lcd.init();
   lcd.backlight();
 
