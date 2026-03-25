@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-LatheStepper is an Arduino sketch that controls a stepper motor for lathe tool positioning. It runs on a **Raspberry Pi Pico W (RP2040)** and uses a TMC2100 driver with 16x microstepping (CFG pins hardwired on module), a 20x4 I2C LCD display, a rotary encoder for speed, and three push buttons.
+LatheStepper is an Arduino sketch that controls a stepper motor for lathe carriage positioning. It runs on a **Raspberry Pi Pico W (RP2040)** with a TMC2100 driver, 20×4 I2C LCD, two rotary encoders, and three push buttons. The controller is positional — it cuts to a stored left limit and rapid-returns to home, repeating on demand.
 
 ## Build & Upload
 
@@ -25,12 +25,6 @@ The official Arduino Mbed RP2040 core does support the Pico, but in practice has
 - `LiquidCrystal I2C claims to run on avr architecture` — the library predates non-AVR Arduino boards; it works fine on RP2040
 - `'B00000001' is deprecated` — LiquidCrystal_I2C uses old AVR-style binary literals; functionally identical to modern `0b00000001` syntax
 
-A clean build looks like:
-```
-Sketch uses 330160 bytes (15%) of program storage space.
-Global variables use 71388 bytes (27%) of dynamic memory
-```
-
 ```bash
 # Install the rp2040 core (once)
 arduino-cli core install rp2040:rp2040
@@ -46,12 +40,12 @@ arduino-cli monitor -p /dev/cu.usbmodem* -c baudrate=9600
 ```
 
 Libraries must be installed in `~/Documents/Arduino/libraries/`:
-- `StepperDriver` — motor control (by Laurentiu Badea — use the `TMC2100` class, not `BasicStepperDriver`)
+- `StepperDriver` — motor control (by Laurentiu Badea — use the `TMC2100` class)
 - `LiquidCrystal_I2C` — I2C LCD driver
 
 ## Hardware Configuration
 
-All logic runs at 3.3V — fully compatible with TMC2100 logic inputs. GP0–GP12 all sit on the left-hand edge of the Pico, keeping wiring to one side. GP5–GP7 are free (TMC2100 CFG pins are hardwired on the module, not driven by the Pico).
+All logic runs at 3.3V — fully compatible with TMC2100 logic inputs. GP0–GP15 all sit on the left-hand edge of the Pico, keeping wiring to one side. GP5–GP7 are free.
 
 | Pin | Function |
 |-----|----------|
@@ -61,47 +55,63 @@ All logic runs at 3.3V — fully compatible with TMC2100 logic inputs. GP0–GP1
 | GP3 | DIR |
 | GP4 | STEP |
 | GP5–GP7 | (free) |
-| GP8 | Encoder CLK (interrupt) |
-| GP9 | Encoder DT |
+| GP8 | Speed encoder CLK (interrupt) |
+| GP9 | Speed encoder DT |
 | GP10 | Forward button |
 | GP11 | Reverse button |
-| GP12 | Start/Stop button (separate box near motor) |
+| GP12 | Start/Stop button (remote box near motor) |
+| GP13 | Jog encoder CLK (interrupt) |
+| GP14 | Jog encoder DT |
+| GP15 | Jog encoder SW (push button — set home / set limit) |
 
 LCD: I2C address `0x27`, 20×4 characters.
-Motor: 400 steps/rev (0.9°/step), default 100 RPM, range 10–400 RPM.
-Microstepping: set by TMC2100 CFG pins (hardwired on module). Update `MICROSTEPS` in sketch to match — default assumes 256x (CFG1/CFG2 floating → internal pull-down → GND). Verify empirically if unsure.
+Motor: 400 steps/rev (0.9°/step), leadscrew M8 × 1.5 mm pitch → 4267 steps/mm at 16× microstep.
+Microstepping: set by TMC2100 CFG pins (hardwired on module). Update `MICROSTEPS` in sketch to match. Default assumes 16× — verify empirically if unsure.
 
 ## Architecture
 
-All logic lives in `LatheStepper.ino`. The motor driver class hierarchy from the StepperDriver library:
+All logic lives in `LatheStepper.ino`.
 
-```
-TMC2100 extends BasicStepperDriver  (CFG pins hardwired on module — no microstep pin control needed)
-```
+**State machine** (`enum State`):
 
-**State variables:**
-- `rpm` (int) — current motor speed, adjusted by encoder in 10 RPM steps
-- `running` (bool) — whether the motor is currently turning
-- `dir` (int8_t) — 1 = forward, −1 = reverse
-- `encTicks` (volatile int) — raw encoder tick accumulator, read and cleared in `loop()`
+| State | Description |
+|-------|-------------|
+| `ST_STARTUP` | Show stored speeds; enc1 adjusts cut RPM, enc2 adjusts rapid RPM. Start/Stop confirms. |
+| `ST_HOMING` | Jog carriage to home position with enc2. Press enc2 SW to zero position. |
+| `ST_SETUP` | Jog to left limit with enc2. Press enc2 SW to store limit. |
+| `ST_READY` | Waiting to cut. Start/Stop begins a cycle. |
+| `ST_CUTTING` | Running to left limit at cut speed. Completion auto-triggers return. |
+| `ST_RETURNING` | Rapid return to home. Completion returns to ST_READY. |
+| `ST_STOPPED` | Emergency stop. Fwd/Start = resume cut; Rev = return home. |
 
-**Control behaviour:**
-- **Forward / Reverse buttons** — set direction and call `startMotor()` (works whether stopped or already running, allowing instant direction change)
-- **Start/Stop button** — toggles between `startMotor()` and `stopMotor()`; designed to live in a separate enclosure near the motor
-- **Rotary encoder** — increments/decrements `rpm` by 10, clamped to 10–400; calls `stepper.setRPM()` mid-run if motor is already running
+**Position tracking:**
+- `currentSteps` (volatile long) — absolute position in steps from home
+- A RISING interrupt on `PIN_STEP` (an output pin — valid on RP2040) fires `stepISR()` on every pulse
+- `stepDir` (+1/−1) is set before each move so the ISR counts in the correct logical direction
+- Position survives emergency stop because every step is counted in hardware
 
-**Continuous-run motor control** (non-blocking):
-- `startMotor()` calls `stepper.startRotate(dir × 360000°)` (~1000 revolutions per block)
-- `loop()` calls `stepper.nextAction()` every iteration to pulse the STEP pin at the correct time
-- When `nextAction()` returns 0 (block complete), `loop()` immediately starts the next block — no pause
+**Key functions:**
+- `startMove(targetSteps, rpm)` — calculates degrees, sets `stepDir`, calls `stepper.startRotate()`
+- `startJog(ticks)` — moves `ticks × 0.1 mm` at `RPM_JOG`; no-op if motor already moving
+- `stopMotor()` — calls `stepper.stop()` + `stepper.disable()`
+- `saveSettings()` / `loadSettings()` — persist cut RPM, rapid RPM and limit to flash via EEPROM emulation
 
-**Display** (refreshed on any state change):
-- Row 0: `>> FORWARD` / `<< REVERSE` (arrows shown only while running)
-- Row 1: `Speed:  NNN RPM`
-- Row 2: `Status: RUNNING` / `Status: STOPPED`
+**Settings persistence (EEPROM emulation):**
+- Philhower core provides `EEPROM.h` backed by a flash slice
+- Stored: `cutRPM`, `rapidRPM`, `limitSteps`, `limitValid`
+- Home is NOT stored — must be re-set each session by jogging + enc2 SW press
+- `SETTINGS_MAGIC` constant guards against reading stale/uninitialised flash; increment it if the `Settings` struct layout changes
+
+**Display** (refreshed on state change or every 250 ms while moving):
+- Row 0: position readout `Pos: XX.X / YY.Ymm`
+- Row 1: speeds or state label
+- Row 2: status / direction arrow
+- Row 3: context hint for next action
+
+**`DIRECTION_SIGN`** (`#define`, default `1`): flip to `−1` if the carriage moves the wrong way when jogging. Independent of encoder wiring — if enc2 turns in the wrong direction, swap its CLK/DT wires instead.
 
 ## Physical layout
 
-Two enclosures are planned:
-- **Top box** (mounted above lathe, visible): LCD, rotary encoder, Forward button, Reverse button
+Two enclosures:
+- **Top box** (mounted above lathe, visible): LCD, speed encoder (enc1), jog encoder (enc2) with push button, Forward button, Reverse button
 - **Motor box** (near motor/tailstock end): Start/Stop button only

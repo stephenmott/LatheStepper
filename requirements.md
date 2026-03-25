@@ -10,15 +10,22 @@ Keep the display mounted on top of the lathe — it's the only place visible fro
 
 **Controls**
 
-- Forward button — sets direction forward and starts motor
-- Reverse button — sets direction reverse and starts motor
-- Start/Stop button — toggles motor on/off; lives in a separate box near the motor/tailstock end
-- Rotary encoder — adjusts speed in 10 RPM steps
-- Fourth button removed
+- **Speed encoder (enc1)** — adjusts cut RPM or rapid RPM in 10 RPM steps
+- **Jog encoder (enc2)** — turns to jog carriage during setup; push button sets home then limit
+- **Forward button** — resume cut after emergency stop
+- **Reverse button** — return to home after emergency stop
+- **Start/Stop button** — start cycle / emergency stop; lives in a separate box near the motor/tailstock end
+
+**Cutting cycle**
+
+1. Start/Stop → carriage cuts left to stored limit at cut speed
+2. Auto rapid-returns right to home
+3. Stops and waits
+4. User advances cross-slide, presses Start/Stop → next pass
 
 **Enclosures**
 
-- **Top box** (mounted above lathe, visible): LCD, rotary encoder, Forward button, Reverse button
+- **Top box** (mounted above lathe, visible): LCD, speed encoder (enc1), jog encoder with push button (enc2), Forward button, Reverse button
 - **Motor box** (near motor/tailstock end): Start/Stop button only
 
 ---
@@ -38,13 +45,16 @@ All signals use 3.3V logic. All GP pins support interrupts. The TMC2100 CFG pins
 | GP3 | DIR | TMC2100 direction |
 | GP4 | STEP | TMC2100 step |
 | GP5–GP7 | (free) | Previously MODE0–2 for DRV8825 |
-| GP8 | Encoder CLK | Interrupt |
-| GP9 | Encoder DT | |
+| GP8 | Speed encoder CLK | Interrupt |
+| GP9 | Speed encoder DT | |
 | GP10 | Forward button | INPUT_PULLUP, LOW = pressed |
 | GP11 | Reverse button | INPUT_PULLUP, LOW = pressed |
 | GP12 | Start/Stop button | INPUT_PULLUP, LOW = pressed — remote box |
+| GP13 | Jog encoder CLK | Interrupt |
+| GP14 | Jog encoder DT | |
+| GP15 | Jog encoder SW | INPUT_PULLUP — press to set home, then limit |
 
-GP0–GP12 all sit on the left-hand side of the Pico, keeping wiring to one edge.
+GP0–GP15 all sit on the left-hand side of the Pico, keeping wiring to one edge.
 
 **TMC2100 CFG pin wiring (on driver module, not Pico):**
 
@@ -65,7 +75,7 @@ Update `MICROSTEPS` in the sketch to match whatever CFG1/CFG2 are set to.
 ## Wiring Diagram
 
 ```
-                      Raspberry Pi Pico
+                      Raspberry Pi Pico W
                     ┌──────────────────────┐
               GP0 ──┤ LCD SDA        VBUS  ├── (USB 5V, not used)
               GP1 ──┤ LCD SCL        VSYS  ├── 5V power in
@@ -77,21 +87,22 @@ Update `MICROSTEPS` in the sketch to match whatever CFG1/CFG2 are set to.
               GND ──┤ GND            GP26  ├── (free)
               GP6 ──┤ (free)          RUN  ├──
               GP7 ──┤ (free)         GP22  ├── (free)
-              GP8 ──┤ ENC_CLK         GND  ├──
-              GP9 ──┤ ENC_DT         GP21  ├── (free)
+              GP8 ──┤ ENC1 CLK        GND  ├──
+              GP9 ──┤ ENC1 DT        GP21  ├── (free)
               GND ──┤ GND            GP20  ├── (free)
              GP10 ──┤ Forward btn    GP19  ├── (free)
              GP11 ──┤ Reverse btn    GP18  ├── (free)
              GP12 ──┤ Start/Stop btn  GND  ├──
-             GP13 ──┤ (free)         GP17  ├── (free)
+             GP13 ──┤ ENC2 CLK       GP17  ├── (free)
               GND ──┤ GND            GP16  ├── (free)
-             GP14 ──┤ (free)         GP15  ├── (free)
+             GP14 ──┤ ENC2 DT        GP15  ├── ENC2 SW
                     └──────────────────────┘
 
 TMC2100:  ENABLE←GP2, DIR←GP3, STEP←GP4
           CFG1/CFG2/CFG3 hardwired on module (see CFG table above)
 Buttons:  one leg to pin, other leg to GND  (INPUT_PULLUP, no resistor needed)
-Encoder:  CLK→GP8, DT→GP9, GND→GND, +→3V3
+Enc1:     CLK→GP8, DT→GP9, GND→GND, +→3V3            (speed)
+Enc2:     CLK→GP13, DT→GP14, SW→GP15, GND→GND, +→3V3  (jog + set home/limit)
 LCD:      SDA→GP0, SCL→GP1, GND→GND, VCC→5V (VSYS)
 ```
 
