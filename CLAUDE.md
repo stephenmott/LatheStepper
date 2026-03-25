@@ -16,10 +16,8 @@ The official Arduino Mbed RP2040 core does support the Pico, but in practice has
 **Arduino IDE setup (once):**
 1. File → Preferences → Additional boards manager URLs, add:
    `https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json`
-2. Tools → Board Manager → search `rp2040` → install **"Raspberry Pi RP2040" by Earle F. Philhower III** — use version **4.4.0**
+2. Tools → Board Manager → search `rp2040` → install **"Raspberry Pi RP2040" by Earle F. Philhower III**
 3. Tools → Board → Raspberry Pi RP2040 Boards → **Raspberry Pi Pico W**
-
-> ⚠️ **Do not upgrade past 4.4.0.** Version 5.x has a known linker bug with the Pico W where the CYW43 WiFi runtime symbols fail to resolve, producing a wall of `undefined reference to '__wrap_cyw43_*'` errors. If you accidentally upgrade via "Update All", roll back to 4.4.0 in Board Manager.
 
 **Expected warnings on successful compile (both harmless):**
 - `LiquidCrystal I2C claims to run on avr architecture` — the library predates non-AVR Arduino boards; it works fine on RP2040
@@ -45,24 +43,24 @@ Libraries must be installed in `~/Documents/Arduino/libraries/`:
 
 ## Hardware Configuration
 
-All logic runs at 3.3V — fully compatible with TMC2100 logic inputs. GP0–GP15 all sit on the left-hand edge of the Pico, keeping wiring to one side. GP5–GP7 are free.
+All logic runs at 3.3V — fully compatible with TMC2100 logic inputs. GP0–GP15 all sit on the left-hand edge of the Pico. The Pico is mounted USB-up so GP13–GP15 sit physically adjacent to the TMC2100, keeping motor signal traces short.
 
 | Pin | Function |
 |-----|----------|
 | GP0 | LCD SDA (I2C0) |
 | GP1 | LCD SCL (I2C0) |
-| GP2 | ENABLE (active LOW) |
-| GP3 | DIR |
-| GP4 | STEP |
-| GP5–GP7 | (free) |
+| GP2 | Forward button |
+| GP3 | Reverse button |
+| GP4 | Start/Stop button (remote box near motor) |
+| GP5 | Jog encoder CLK (interrupt) |
+| GP6 | Jog encoder DT |
+| GP7 | Jog encoder SW (push button — set home / set limit) |
 | GP8 | Speed encoder CLK (interrupt) |
 | GP9 | Speed encoder DT |
-| GP10 | Forward button |
-| GP11 | Reverse button |
-| GP12 | Start/Stop button (remote box near motor) |
-| GP13 | Jog encoder CLK (interrupt) |
-| GP14 | Jog encoder DT |
-| GP15 | Jog encoder SW (push button — set home / set limit) |
+| GP10–GP12 | (free) |
+| GP13 | ENABLE (active LOW) |
+| GP14 | DIR |
+| GP15 | STEP |
 
 LCD: I2C address `0x27`, 20×4 characters.
 Motor: 400 steps/rev (0.9°/step), leadscrew M8 × 1.5 mm pitch → 4267 steps/mm at 16× microstep.
