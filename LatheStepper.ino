@@ -21,11 +21,11 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
-#include "BasicStepperDriver.h"
+#include "TMC2100.h"
 
 // ── Motor ──────────────────────────────────────────────────────────────────
 #define MOTOR_STEPS  400    // 0.9°/step NEMA 17
-#define MICROSTEPS    16    // Set by CFG1/CFG2 on TMC2100 module (both VCC = 16x)
+#define MICROSTEPS   256    // TMC2100 CFG1/CFG2 floating = internal pull-down = GND = 256x
 #define DIR_PIN       3
 #define STEP_PIN      4
 #define ENABLE_PIN    2
@@ -48,7 +48,7 @@
 #define RPM_STEP     10
 
 // ── Objects ────────────────────────────────────────────────────────────────
-BasicStepperDriver stepper(MOTOR_STEPS, DIR_PIN, STEP_PIN, ENABLE_PIN);
+TMC2100 stepper(MOTOR_STEPS, DIR_PIN, STEP_PIN, ENABLE_PIN);
 LiquidCrystal_I2C lcd(0x27, 20, 4);
 
 // ── State ──────────────────────────────────────────────────────────────────

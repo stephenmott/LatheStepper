@@ -36,18 +36,17 @@ Global variables use 71388 bytes (27%) of dynamic memory
 arduino-cli core install rp2040:rp2040
 
 # Compile
-arduino-cli compile --fqbn rp2040:rp2040:rpipico LatheStepper/
+arduino-cli compile --fqbn rp2040:rp2040:rpipicow LatheStepper/
 
-# Upload (Pico appears as a USB serial port on Mac — adjust port as needed)
-arduino-cli upload -p /dev/cu.usbmodem* --fqbn rp2040:rp2040:rpipico LatheStepper/
+# Upload (Pico W appears as a USB serial port on Mac — adjust port as needed)
+arduino-cli upload -p /dev/cu.usbmodem* --fqbn rp2040:rp2040:rpipicow LatheStepper/
 
 # Monitor serial output (9600 baud)
 arduino-cli monitor -p /dev/cu.usbmodem* -c baudrate=9600
 ```
 
 Libraries must be installed in `~/Documents/Arduino/libraries/`:
-- `StepperDriver` — motor control
-- `OneButton` — multi-state button events
+- `StepperDriver` — motor control (by Laurentiu Badea — use the `TMC2100` class, not `BasicStepperDriver`)
 - `LiquidCrystal_I2C` — I2C LCD driver
 
 ## Hardware Configuration
@@ -69,14 +68,15 @@ All logic runs at 3.3V — fully compatible with TMC2100 logic inputs. GP0–GP1
 | GP12 | Start/Stop button (separate box near motor) |
 
 LCD: I2C address `0x27`, 20×4 characters.
-Motor: 400 steps/rev (0.9°/step), default 100 RPM, 16x microstepping, range 10–400 RPM.
+Motor: 400 steps/rev (0.9°/step), default 100 RPM, range 10–400 RPM.
+Microstepping: set by TMC2100 CFG pins (hardwired on module). Update `MICROSTEPS` in sketch to match — default assumes 256x (CFG1/CFG2 floating → internal pull-down → GND). Verify empirically if unsure.
 
 ## Architecture
 
 All logic lives in `LatheStepper.ino`. The motor driver class hierarchy from the StepperDriver library:
 
 ```
-BasicStepperDriver  (active driver — TMC2100 uses STEP/DIR only, no microstep pin control)
+TMC2100 extends BasicStepperDriver  (CFG pins hardwired on module — no microstep pin control needed)
 ```
 
 **State variables:**
