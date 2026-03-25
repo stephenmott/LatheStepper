@@ -49,11 +49,11 @@ The Pico is mounted with **USB pointing up and off the board edge** so it can be
 | GP5 | Jog encoder CLK | Interrupt |
 | GP6 | Jog encoder DT | |
 | GP7 | Jog encoder SW | INPUT_PULLUP — press to set home, then limit |
-| GP8 | Speed encoder CLK | Interrupt |
-| GP9 | Speed encoder DT | |
-| GP10 | Enc1 VCC | OUTPUT HIGH — supplies 3.3 V to speed encoder (~1 mA) |
-| GP11 | STEP | TMC2100 step — hard-wired |
-| GP12 | (free) | |
+| GP8 | (free) | Gap between ENC2 and ENC1 plugs |
+| GP9 | Speed encoder CLK | Interrupt |
+| GP10 | Speed encoder DT | |
+| GP11 | Enc1 VCC | OUTPUT HIGH — supplies 3.3 V to speed encoder (~1 mA) |
+| GP12 | STEP | TMC2100 step — hard-wired |
 | GP13 | ENABLE | Active LOW — hard-wired to TMC2100 |
 | GP14 | LCD SDA | I2C1 hardware (Wire1) — as physically wired |
 | GP15 | LCD SCL | I2C1 hardware (Wire1) — as physically wired |
@@ -96,12 +96,12 @@ Update `MICROSTEPS` in the sketch to match whatever CFG1/CFG2 are set to.
               GND ──┤ GND             GND  ├──
               GP6 ──┤ ENC2 DT        GP27  ├── (free)
               GP7 ──┤ ENC2 SW        GP26  ├── (free)
-              GP8 ──┤ ENC1 CLK        RUN  ├──
-              GP9 ──┤ ENC1 DT        GP22  ├── (free)
+              GP8 ──┤ (free)          RUN  ├──
+              GP9 ──┤ ENC1 CLK       GP22  ├── (free)
               GND ──┤ GND             GND  ├──
-             GP10 ──┤ ENC1 VCC*      GP21  ├── (free)
-             GP11 ──┤ STEP           GP20  ├── (free)
-             GP12 ──┤ (free)         GP19  ├── (free)
+             GP10 ──┤ ENC1 DT        GP21  ├── (free)
+             GP11 ──┤ ENC1 VCC*      GP20  ├── (free)
+             GP12 ──┤ STEP           GP19  ├── (free)
               GND ──┤ GND            GP18  ├── (free)
              GP13 ──┤ ENABLE          GND  ├──
              GP14 ──┤ LCD SDA        GP17  ├── (free)
@@ -111,10 +111,10 @@ Update `MICROSTEPS` in the sketch to match whatever CFG1/CFG2 are set to.
 * GP4 and GP10 are set OUTPUT HIGH in firmware — they supply ~3.3 V to encoder VCC.
   Encoders draw ~1 mA each, within the 12 mA GPIO source limit.
 
-TMC2100:  ENABLE←GP13, DIR←GP3, STEP←GP11
+TMC2100:  ENABLE←GP13, DIR←GP3, STEP←GP12
           CFG1/CFG2/CFG3 hardwired on module (see CFG table above)
 Buttons:  one leg to pin, other leg to GND  (INPUT_PULLUP, no resistor needed)
-Enc1:     CLK→GP8,  DT→GP9,  GND→GND, VCC→GP10*           (speed)
+Enc1:     CLK→GP9,  DT→GP10, GND→GND, VCC→GP11*           (speed)
 Enc2:     CLK→GP5,  DT→GP6,  SW→GP7,  GND→GND, VCC→GP4*  (jog + set home/limit)
 LCD:      SDA→GP14, SCL→GP15, GND→GND, VCC→VSYS (5V, right edge)  [uses Wire1 / I2C1]
 ```
@@ -128,8 +128,8 @@ JST connectors soldered to the protoboard next to the Pico. The Pico left edge h
 | **LCD** (4-pin) | GND · SDA · SCL · VCC | GND=pin 17; SDA=GP14; SCL=GP15; VCC from VSYS via protoboard trace |
 | **Buttons** (4-pin) | FWD · REV · GND · SS | FWD=GP0; REV=GP1; GND=pin 3; SS=GP2 |
 | **ENC2** (5-pin) | VCC · CLK · GND · DT · SW | VCC=GP4; CLK=GP5; GND=pin 8; DT=GP6; SW=GP7 |
-| **ENC1** (4-pin) | CLK · DT · GND · VCC | CLK=GP8; DT=GP9; GND=pin 13; VCC=GP10 |
-| **Motor** (3 jumpers) | DIR · STEP · ENABLE | GP3 · GP11 · GP13 → TMC2100 |
+| **ENC1** (4-pin) | CLK · GND · DT · VCC | CLK=GP9; GND=pin 13; DT=GP10; VCC=GP11 |
+| **Motor** (3 jumpers) | DIR · STEP · ENABLE | GP3 · GP12 · GP13 → TMC2100 |
 
 ---
 

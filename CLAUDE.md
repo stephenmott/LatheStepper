@@ -55,11 +55,11 @@ All logic runs at 3.3V — fully compatible with TMC2100 logic inputs. GP0–GP1
 | GP5 | Jog encoder CLK (interrupt) |
 | GP6 | Jog encoder DT |
 | GP7 | Jog encoder SW (push button — set home / set limit) |
-| GP8 | Speed encoder CLK (interrupt) |
-| GP9 | Speed encoder DT |
-| GP10 | Enc1 VCC (OUTPUT HIGH — supplies speed encoder ~1 mA) |
-| GP11 | STEP (TMC2100, hard-wired) |
-| GP12 | (free) |
+| GP8 | (free — gap between ENC2 and ENC1 plugs) |
+| GP9 | Speed encoder CLK (interrupt) |
+| GP10 | Speed encoder DT |
+| GP11 | Enc1 VCC (OUTPUT HIGH — supplies speed encoder ~1 mA) |
+| GP12 | STEP (TMC2100, hard-wired) |
 | GP13 | ENABLE (active LOW, hard-wired to TMC2100) |
 | GP14 | LCD SDA (I2C1 / Wire1) |
 | GP15 | LCD SCL (I2C1 / Wire1) |

@@ -15,10 +15,11 @@
     GP5       Jog enc CLK     (interrupt)                 │ 5-pin JST: VCC,CLK,GND,DT,SW
     GP6       Jog enc DT                                  │   (GND between GP5 and GP6)
     GP7       Jog enc SW      (INPUT_PULLUP)              ┘
-    GP8       Speed enc CLK   (interrupt)                 ┐
-    GP9       Speed enc DT                                 │ 4-pin JST: CLK,DT,GND,VCC
-    GP10      ENC1 VCC (OUTPUT HIGH — encoder supply)     ┘   (GND between GP9 and GP10)
-    GP11      STEP → TMC2100 (hard-wired)
+    GP8       (free — gap between ENC2 and ENC1 plugs)
+    GP9       Speed enc CLK   (interrupt)                 ┐
+    GP10      Speed enc DT                                 │ 4-pin JST: CLK,GND,DT,VCC
+    GP11      ENC1 VCC (OUTPUT HIGH — encoder supply)     ┘   (GND between GP9 and GP10)
+    GP12      STEP → TMC2100 (hard-wired)
     GP12      (free)
     GP13      ENABLE → TMC2100 (active LOW, hard-wired)
     GP14      LCD SDA (I2C1 / Wire1) — as physically wired ┐ 4-pin JST: GND,SDA,SCL,VCC
@@ -59,11 +60,11 @@
 #define PIN_ENC2_CLK   5    // jog encoder CLK (interrupt)
 #define PIN_ENC2_DT    6    // jog encoder DT
 #define PIN_ENC2_SW    7    // jog encoder SW: set home (first press), then limit (second press)
-#define PIN_ENC1_CLK   8    // speed encoder CLK (interrupt)
-#define PIN_ENC1_DT    9    // speed encoder DT
-#define PIN_ENC1_VCC  10    // OUTPUT HIGH — supplies encoder 1 VCC via 4-pin JST
-#define PIN_STEP      11    // TMC2100 — hard-wired
-// GP12 free
+// GP8 free — gap between ENC2 and ENC1 plugs
+#define PIN_ENC1_CLK   9    // speed encoder CLK (interrupt)
+#define PIN_ENC1_DT   10    // speed encoder DT
+#define PIN_ENC1_VCC  11    // OUTPUT HIGH — supplies encoder 1 VCC via 4-pin JST
+#define PIN_STEP      12    // TMC2100 — hard-wired
 #define PIN_ENABLE    13    // active LOW
 #define PIN_LCD_SDA   14    // I2C1 — as physically wired
 #define PIN_LCD_SCL   15    // I2C1
