@@ -89,22 +89,23 @@ Update `MICROSTEPS` in the sketch to match whatever CFG1/CFG2 are set to.
               GP0 ──┤ DIR            VBUS  ├── (USB 5V)
               GP1 ──┤ STEP           VSYS  ├── 5V power in → LCD VCC
               GND ──┤ GND             GND  ├──
-              GP2 ──┤ Forward btn     3V3  ├── (free)
-              GP3 ──┤ Reverse btn  3V3_EN  ├──
-              GP4 ──┤ ENC2 VCC*      GP28  ├── (free)
-              GP5 ──┤ ENC2 CLK       GP27  ├── (free)
-              GND ──┤ GND            GP26  ├── (free)
-              GP6 ──┤ ENC2 DT         RUN  ├──
-              GP7 ──┤ ENC2 SW        GP22  ├── (free)
-              GP8 ──┤ ENC1 CLK        GND  ├──
-              GP9 ──┤ ENC1 DT        GP21  ├── (free)
-              GND ──┤ GND            GP20  ├── (free)
-             GP10 ──┤ ENC1 VCC*      GP19  ├── (free)
-             GP11 ──┤ Start/Stop btn GP18  ├── (free)
-             GP12 ──┤ (free)          GND  ├──
-             GP13 ──┤ ENABLE         GP17  ├── (free)
-              GND ──┤ GND            GP16  ├── (free)
-             GP14 ──┤ LCD SDA        GP15  ├── LCD SCL
+              GP2 ──┤ Forward btn  3V3_EN  ├──
+              GP3 ──┤ Reverse btn     3V3  ├── (free)
+              GP4 ──┤ ENC2 VCC*  ADC_VREF  ├──
+              GP5 ──┤ ENC2 CLK       GP28  ├── (free)
+              GND ──┤ GND             GND  ├──
+              GP6 ──┤ ENC2 DT        GP27  ├── (free)
+              GP7 ──┤ ENC2 SW        GP26  ├── (free)
+              GP8 ──┤ ENC1 CLK        RUN  ├──
+              GP9 ──┤ ENC1 DT        GP22  ├── (free)
+              GND ──┤ GND             GND  ├──
+             GP10 ──┤ ENC1 VCC*      GP21  ├── (free)
+             GP11 ──┤ Start/Stop btn GP20  ├── (free)
+             GP12 ──┤ (free)         GP19  ├── (free)
+              GND ──┤ GND            GP18  ├── (free)
+             GP13 ──┤ ENABLE          GND  ├──
+             GP14 ──┤ LCD SDA        GP17  ├── (free)
+             GP15 ──┤ LCD SCL        GP16  ├── (free)
                     └──────────────────────┘
 
 * GP4 and GP10 are set OUTPUT HIGH in firmware — they supply ~3.3 V to encoder VCC.
