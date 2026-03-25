@@ -8,9 +8,9 @@
 
   Pins (Pico mounted USB-up; GP0 = top of left edge, GP15 = bottom):
     GP0       DIR  → TMC2100 (hard-wired)
-    GP1       STEP → TMC2100 (hard-wired)
-    GP2       Forward button  (INPUT_PULLUP)             ┐ 3-pin JST: GND,FWD,REV
-    GP3       Reverse button  (INPUT_PULLUP)             ┘   (GND pin is above GP2)
+    GP1       Start/Stop — remote box (INPUT_PULLUP)     ┐ 4-pin JST: SS,GND,FWD,REV
+    GP2       Forward button  (INPUT_PULLUP)              │   (GND pin between GP1 and GP2)
+    GP3       Reverse button  (INPUT_PULLUP)             ┘
     GP4       ENC2 VCC (OUTPUT HIGH — encoder supply)    ┐
     GP5       Jog enc CLK     (interrupt)                 │ 5-pin JST: VCC,CLK,GND,DT,SW
     GP6       Jog enc DT                                  │   (GND between GP5 and GP6)
@@ -18,7 +18,7 @@
     GP8       Speed enc CLK   (interrupt)                 ┐
     GP9       Speed enc DT                                 │ 4-pin JST: CLK,DT,GND,VCC
     GP10      ENC1 VCC (OUTPUT HIGH — encoder supply)     ┘   (GND between GP9 and GP10)
-    GP11      Start/Stop — remote box (INPUT_PULLUP)      2-pin twisted pair to motor box
+    GP11      STEP → TMC2100 (hard-wired)
     GP12      (free)
     GP13      ENABLE → TMC2100 (active LOW, hard-wired)
     GP14      LCD SDA (I2C1 / Wire1) — as physically wired ┐ 4-pin JST: GND,SDA,SCL,VCC
@@ -52,9 +52,9 @@
 
 // ── Pins ──────────────────────────────────────────────────────────────────────
 #define PIN_DIR        0    // TMC2100 — hard-wired, can reach anywhere on board
-#define PIN_STEP       1    // TMC2100
-#define PIN_BTN_FWD    2    // resume cut (also: confirm startup)
-#define PIN_BTN_REV    3    // return home after e-stop
+#define PIN_BTN_SS     1    // Start/Stop — remote box, twisted pair  ┐ 4-pin JST:
+#define PIN_BTN_FWD    2    // resume cut (also: confirm startup)      │ SS,GND,FWD,REV
+#define PIN_BTN_REV    3    // return home after e-stop               ┘ (GND at pin 3)
 #define PIN_ENC2_VCC   4    // OUTPUT HIGH — supplies encoder 2 VCC via 5-pin JST
 #define PIN_ENC2_CLK   5    // jog encoder CLK (interrupt)
 #define PIN_ENC2_DT    6    // jog encoder DT
@@ -62,7 +62,7 @@
 #define PIN_ENC1_CLK   8    // speed encoder CLK (interrupt)
 #define PIN_ENC1_DT    9    // speed encoder DT
 #define PIN_ENC1_VCC  10    // OUTPUT HIGH — supplies encoder 1 VCC via 4-pin JST
-#define PIN_BTN_SS    11    // Start/Stop — remote box, twisted pair
+#define PIN_STEP      11    // TMC2100 — hard-wired
 // GP12 free
 #define PIN_ENABLE    13    // active LOW
 #define PIN_LCD_SDA   14    // I2C1 — as physically wired

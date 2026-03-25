@@ -42,7 +42,7 @@ The Pico is mounted with **USB pointing up and off the board edge** so it can be
 | Pin | Function | Notes |
 |-----|----------|-------|
 | GP0 | DIR | TMC2100 direction — hard-wired |
-| GP1 | STEP | TMC2100 step — hard-wired |
+| GP1 | Start/Stop button | INPUT_PULLUP, LOW = pressed — remote box (twisted pair) |
 | GP2 | Forward button | INPUT_PULLUP, LOW = pressed |
 | GP3 | Reverse button | INPUT_PULLUP, LOW = pressed |
 | GP4 | Enc2 VCC | OUTPUT HIGH — supplies 3.3 V to jog encoder (~1 mA) |
@@ -52,7 +52,7 @@ The Pico is mounted with **USB pointing up and off the board edge** so it can be
 | GP8 | Speed encoder CLK | Interrupt |
 | GP9 | Speed encoder DT | |
 | GP10 | Enc1 VCC | OUTPUT HIGH — supplies 3.3 V to speed encoder (~1 mA) |
-| GP11 | Start/Stop button | INPUT_PULLUP, LOW = pressed — remote box (twisted pair) |
+| GP11 | STEP | TMC2100 step — hard-wired |
 | GP12 | (free) | |
 | GP13 | ENABLE | Active LOW — hard-wired to TMC2100 |
 | GP14 | LCD SDA | I2C1 hardware (Wire1) — as physically wired |
@@ -87,7 +87,7 @@ Update `MICROSTEPS` in the sketch to match whatever CFG1/CFG2 are set to.
                       Raspberry Pi Pico W
                     ┌──────────────────────┐
               GP0 ──┤ DIR            VBUS  ├── (USB 5V)
-              GP1 ──┤ STEP           VSYS  ├── 5V power in → LCD VCC
+              GP1 ──┤ Start/Stop btn VSYS  ├── 5V power in → LCD VCC
               GND ──┤ GND             GND  ├──
               GP2 ──┤ Forward btn  3V3_EN  ├──
               GP3 ──┤ Reverse btn     3V3  ├── (free)
@@ -100,7 +100,7 @@ Update `MICROSTEPS` in the sketch to match whatever CFG1/CFG2 are set to.
               GP9 ──┤ ENC1 DT        GP22  ├── (free)
               GND ──┤ GND             GND  ├──
              GP10 ──┤ ENC1 VCC*      GP21  ├── (free)
-             GP11 ──┤ Start/Stop btn GP20  ├── (free)
+             GP11 ──┤ STEP           GP20  ├── (free)
              GP12 ──┤ (free)         GP19  ├── (free)
               GND ──┤ GND            GP18  ├── (free)
              GP13 ──┤ ENABLE          GND  ├──
@@ -126,11 +126,10 @@ JST connectors soldered to the protoboard next to the Pico. The Pico left edge h
 | Connector | Pins (physical order) | Wires |
 |-----------|----------------------|-------|
 | **LCD** (4-pin) | GND · SDA · SCL · VCC | GND=pin 17; SDA=GP14; SCL=GP15; VCC from VSYS via protoboard trace |
-| **FWD+REV** (3-pin) | GND · FWD · REV | GND=pin 3; FWD=GP2; REV=GP3 |
+| **Buttons** (4-pin) | SS · GND · FWD · REV | SS=GP1; GND=pin 3; FWD=GP2; REV=GP3 |
 | **ENC2** (5-pin) | VCC · CLK · GND · DT · SW | VCC=GP4; CLK=GP5; GND=pin 8; DT=GP6; SW=GP7 |
 | **ENC1** (4-pin) | CLK · DT · GND · VCC | CLK=GP8; DT=GP9; GND=pin 13; VCC=GP10 |
-| **SS remote** (2-pin) | SS · GND | GP11 + any GND; twisted pair to motor box |
-| **Motor** (3 jumpers) | ENABLE · DIR · STEP | GP13 · GP14 · GP15 → TMC2100 |
+| **Motor** (3 jumpers) | DIR · STEP · ENABLE | GP0 · GP11 · GP13 → TMC2100 |
 
 ---
 
