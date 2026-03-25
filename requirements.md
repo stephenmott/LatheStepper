@@ -25,20 +25,19 @@ Keep the display mounted on top of the lathe — it's the only place visible fro
 
 ## Hardware / Pin Mapping
 
-**Board: Raspberry Pi Pico (RP2040)**
+**Board: Raspberry Pi Pico W (RP2040)**
+**Driver: TMC2100**
 
-All signals use 3.3V logic — fully compatible with the DRV8825 logic inputs. All GP pins support interrupts, so encoder CLK can go on any pin.
+All signals use 3.3V logic. All GP pins support interrupts. The TMC2100 CFG pins are hardwired on the module — not connected to the Pico — so only EN/DIR/STEP are needed, freeing GP5–GP7.
 
 | Pin | Function | Notes |
 |-----|----------|-------|
 | GP0 | LCD SDA | I2C0 hardware |
 | GP1 | LCD SCL | I2C0 hardware |
 | GP2 | ENABLE | Active LOW |
-| GP3 | DIR | DRV8825 direction |
-| GP4 | STEP | DRV8825 step |
-| GP5 | MODE0 | Microstep select |
-| GP6 | MODE1 | Microstep select |
-| GP7 | MODE2 | Microstep select — all HIGH = 32x |
+| GP3 | DIR | TMC2100 direction |
+| GP4 | STEP | TMC2100 step |
+| GP5–GP7 | (free) | Previously MODE0–2 for DRV8825 |
 | GP8 | Encoder CLK | Interrupt |
 | GP9 | Encoder DT | |
 | GP10 | Forward button | INPUT_PULLUP, LOW = pressed |
@@ -46,6 +45,20 @@ All signals use 3.3V logic — fully compatible with the DRV8825 logic inputs. A
 | GP12 | Start/Stop button | INPUT_PULLUP, LOW = pressed — remote box |
 
 GP0–GP12 all sit on the left-hand side of the Pico, keeping wiring to one edge.
+
+**TMC2100 CFG pin wiring (on driver module, not Pico):**
+
+| CFG1 | CFG2 | Microsteps | Mode |
+|------|------|------------|------|
+| GND  | GND  | 256        | SpreadCycle |
+| VCC  | GND  | 128        | SpreadCycle |
+| GND  | VCC  | 64         | SpreadCycle |
+| VCC  | VCC  | **16**     | SpreadCycle — **recommended default** |
+| OPEN | GND  | 16 → 256   | StealthChop + MicroPlyer |
+
+CFG3: tie to GND for StealthChop (quiet), VCC for SpreadCycle (more torque). For lathe carriage speeds StealthChop is fine.
+
+Update `MICROSTEPS` in the sketch to match whatever CFG1/CFG2 are set to.
 
 ---
 
@@ -60,10 +73,10 @@ GP0–GP12 all sit on the left-hand side of the Pico, keeping wiring to one edge
               GP2 ──┤ ENABLE          3V3  ├── 3.3V out → encoder +
               GP3 ──┤ DIR          3V3_EN  ├──
               GP4 ──┤ STEP           GP28  ├── (free)
-              GP5 ──┤ MODE0          GP27  ├── (free)
+              GP5 ──┤ (free)         GP27  ├── (free)
               GND ──┤ GND            GP26  ├── (free)
-              GP6 ──┤ MODE1           RUN  ├──
-              GP7 ──┤ MODE2          GP22  ├── (free)
+              GP6 ──┤ (free)          RUN  ├──
+              GP7 ──┤ (free)         GP22  ├── (free)
               GP8 ──┤ ENC_CLK         GND  ├──
               GP9 ──┤ ENC_DT         GP21  ├── (free)
               GND ──┤ GND            GP20  ├── (free)
@@ -75,8 +88,8 @@ GP0–GP12 all sit on the left-hand side of the Pico, keeping wiring to one edge
              GP14 ──┤ (free)         GP15  ├── (free)
                     └──────────────────────┘
 
-DRV8825:  ENABLE←GP2, DIR←GP3, STEP←GP4,
-          MODE0←GP5, MODE1←GP6, MODE2←GP7
+TMC2100:  ENABLE←GP2, DIR←GP3, STEP←GP4
+          CFG1/CFG2/CFG3 hardwired on module (see CFG table above)
 Buttons:  one leg to pin, other leg to GND  (INPUT_PULLUP, no resistor needed)
 Encoder:  CLK→GP8, DT→GP9, GND→GND, +→3V3
 LCD:      SDA→GP0, SCL→GP1, GND→GND, VCC→5V (VSYS)
@@ -86,7 +99,7 @@ LCD:      SDA→GP0, SCL→GP1, GND→GND, VCC→5V (VSYS)
 
 ## EMI — Remote Start/Stop Button
 
-The motor box is a noisy environment. The DRV8825 switches at high frequency and the motor wires carry fast current spikes. For the cable run from the remote box back to the Arduino:
+The motor box is a noisy environment. The TMC2100 switches at high frequency and the motor wires carry fast current spikes. For the cable run from the remote box back to the Arduino:
 
 **Do:**
 - Use **twisted pair** cable (cheap alarm cable works fine) — one wire is the signal, one is the dedicated GND return. Twisting cancels induced noise.

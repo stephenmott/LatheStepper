@@ -2,8 +2,9 @@
   LatheStepper - Lathe carriage motor control
   Sieg C0 Z-axis (lead screw) continuous-run controller.
 
-  Board: Raspberry Pi Pico (RP2040)
-         arduino-pico core — GP pin numbers used directly.
+  Board:  Raspberry Pi Pico W (RP2040)
+          arduino-pico core v4.4.0 — GP pin numbers used directly.
+  Driver: TMC2100 — CFG pins hardwired on module, not driven by Pico.
 
   Controls:
     Forward button  (GP10) - run carriage forward
@@ -20,16 +21,16 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
-#include "DRV8825.h"
+#include "BasicStepperDriver.h"
 
 // ── Motor ──────────────────────────────────────────────────────────────────
 #define MOTOR_STEPS  400    // 0.9°/step NEMA 17
-#define DIR_PIN      3
-#define STEP_PIN     4
-#define ENABLE_PIN   2
-#define MODE0        5
-#define MODE1        6
-#define MODE2        7
+#define MICROSTEPS    16    // Set by CFG1/CFG2 on TMC2100 module (both VCC = 16x)
+#define DIR_PIN       3
+#define STEP_PIN      4
+#define ENABLE_PIN    2
+// CFG1/CFG2 are hardwired on the TMC2100 module — not driven by the Pico.
+// GP5, GP6, GP7 are free.
 
 // ── Buttons (active-LOW, internal pull-up) ─────────────────────────────────
 #define BTN_FORWARD   10
@@ -47,7 +48,7 @@
 #define RPM_STEP     10
 
 // ── Objects ────────────────────────────────────────────────────────────────
-DRV8825 stepper(MOTOR_STEPS, DIR_PIN, STEP_PIN, ENABLE_PIN, MODE0, MODE1, MODE2);
+BasicStepperDriver stepper(MOTOR_STEPS, DIR_PIN, STEP_PIN, ENABLE_PIN);
 LiquidCrystal_I2C lcd(0x27, 20, 4);
 
 // ── State ──────────────────────────────────────────────────────────────────
@@ -137,9 +138,8 @@ void setup() {
   lcd.init();
   lcd.backlight();
 
-  stepper.begin(rpm);
+  stepper.begin(rpm, MICROSTEPS);
   stepper.setEnableActiveState(LOW);
-  stepper.setMicrostep(32);
   stepper.disable();
 
   pinMode(BTN_FORWARD,   INPUT_PULLUP);

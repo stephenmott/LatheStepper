@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-LatheStepper is an Arduino sketch that controls a stepper motor for lathe tool positioning. It runs on a **Raspberry Pi Pico (RP2040)** and uses a DRV8825 driver with 32x microstepping, a 20x4 I2C LCD display, a rotary encoder for speed, and three push buttons.
+LatheStepper is an Arduino sketch that controls a stepper motor for lathe tool positioning. It runs on a **Raspberry Pi Pico W (RP2040)** and uses a TMC2100 driver with 16x microstepping (CFG pins hardwired on module), a 20x4 I2C LCD display, a rotary encoder for speed, and three push buttons.
 
 ## Build & Upload
 
@@ -52,7 +52,7 @@ Libraries must be installed in `~/Documents/Arduino/libraries/`:
 
 ## Hardware Configuration
 
-All logic runs at 3.3V — fully compatible with DRV8825 logic inputs. GP0–GP12 all sit on the left-hand edge of the Pico, keeping wiring to one side.
+All logic runs at 3.3V — fully compatible with TMC2100 logic inputs. GP0–GP12 all sit on the left-hand edge of the Pico, keeping wiring to one side. GP5–GP7 are free (TMC2100 CFG pins are hardwired on the module, not driven by the Pico).
 
 | Pin | Function |
 |-----|----------|
@@ -61,7 +61,7 @@ All logic runs at 3.3V — fully compatible with DRV8825 logic inputs. GP0–GP1
 | GP2 | ENABLE (active LOW) |
 | GP3 | DIR |
 | GP4 | STEP |
-| GP5–GP7 | MODE0/MODE1/MODE2 (microstep select) |
+| GP5–GP7 | (free) |
 | GP8 | Encoder CLK (interrupt) |
 | GP9 | Encoder DT |
 | GP10 | Forward button |
@@ -69,14 +69,14 @@ All logic runs at 3.3V — fully compatible with DRV8825 logic inputs. GP0–GP1
 | GP12 | Start/Stop button (separate box near motor) |
 
 LCD: I2C address `0x27`, 20×4 characters.
-Motor: 400 steps/rev (0.9°/step), default 100 RPM, 32x microstepping, range 10–400 RPM.
+Motor: 400 steps/rev (0.9°/step), default 100 RPM, 16x microstepping, range 10–400 RPM.
 
 ## Architecture
 
 All logic lives in `LatheStepper.ino`. The motor driver class hierarchy from the StepperDriver library:
 
 ```
-BasicStepperDriver  →  A4988  →  DRV8825 (active driver)
+BasicStepperDriver  (active driver — TMC2100 uses STEP/DIR only, no microstep pin control)
 ```
 
 **State variables:**
