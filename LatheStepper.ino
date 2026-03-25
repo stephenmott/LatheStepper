@@ -76,7 +76,7 @@
 // ── EEPROM ────────────────────────────────────────────────────────────────────
 #define EEPROM_SIZE    64
 // Increment magic when Settings struct layout changes — forces defaults on next boot.
-#define SETTINGS_MAGIC 0xC0LA0002UL
+#define SETTINGS_MAGIC 0xCAFE0002UL
 
 struct Settings {
   uint32_t magic;
