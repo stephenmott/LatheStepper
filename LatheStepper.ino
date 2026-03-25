@@ -9,13 +9,17 @@
 
   Pins:
     GP0/GP1   LCD SDA/SCL (I2C0)
-    GP2       ENABLE (active LOW)
-    GP3/GP4   DIR / STEP
-    GP8/GP9   Speed encoder CLK/DT  (enc1 — adjusts cut/rapid RPM)
-    GP10/11   Forward / Reverse buttons  (INPUT_PULLUP)
-    GP12      Start/Stop — remote box   (INPUT_PULLUP)
-    GP13/14   Jog encoder CLK/DT        (enc2 — jogs carriage during setup)
-    GP15      Jog encoder SW            (press to set home, then limit)
+    GP2       Forward button           (INPUT_PULLUP)
+    GP3       Reverse button           (INPUT_PULLUP)
+    GP4       Start/Stop — remote box  (INPUT_PULLUP)
+    GP5/GP6   Jog encoder CLK/DT      (enc2 — jogs carriage during setup)
+    GP7       Jog encoder SW           (press to set home, then limit)
+    GP8/GP9   Speed encoder CLK/DT    (enc1 — adjusts cut/rapid RPM)
+    GP10–12   (free)
+    GP13      ENABLE (active LOW)
+    GP14/15   DIR / STEP
+  Note: GP13–15 are at the bottom of the Pico left edge (USB at top),
+        placing the motor signals physically close to the TMC2100.
 
   Session setup (required after each power-on):
     1. Startup screen — enc1 adjusts cut RPM, enc2 adjusts rapid RPM.
@@ -46,18 +50,18 @@
 // ── Pins ──────────────────────────────────────────────────────────────────────
 #define PIN_LCD_SDA    0
 #define PIN_LCD_SCL    1
-#define PIN_ENABLE     2
-#define PIN_DIR        3
-#define PIN_STEP       4
-// GP5–GP7 free
+#define PIN_BTN_FWD    2    // resume cut (also: confirm startup)
+#define PIN_BTN_REV    3    // return home after e-stop
+#define PIN_BTN_SS     4    // Start/Stop — remote box
+#define PIN_ENC2_CLK   5    // jog encoder
+#define PIN_ENC2_DT    6
+#define PIN_ENC2_SW    7    // set home (first press), then limit (second press)
 #define PIN_ENC1_CLK   8    // speed encoder
 #define PIN_ENC1_DT    9
-#define PIN_BTN_FWD   10    // resume cut (also: confirm startup)
-#define PIN_BTN_REV   11    // return home after e-stop
-#define PIN_BTN_SS    12    // Start/Stop — remote box
-#define PIN_ENC2_CLK  13    // jog encoder
-#define PIN_ENC2_DT   14
-#define PIN_ENC2_SW   15    // set home (first press), then limit (second press)
+// GP10–GP12 free
+#define PIN_ENABLE    13    // active LOW — bottom of Pico left edge, close to TMC2100
+#define PIN_DIR       14
+#define PIN_STEP      15
 
 // ── Motor ─────────────────────────────────────────────────────────────────────
 #define MOTOR_STEPS    400     // 0.9°/step NEMA 17
