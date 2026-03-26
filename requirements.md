@@ -62,7 +62,7 @@ GP0–GP15 all sit on the left-hand edge of the Pico.
 
 **Why GP14/GP15 for LCD use Wire1, not Wire?** The RP2040 has two I2C hardware blocks. Each is fixed to specific pins in a repeating pattern: I2C0 covers GP0/1, GP4/5, GP8/9, GP12/13; I2C1 covers GP2/3, GP6/7, GP10/11, GP14/15. The `LiquidCrystal_I2C` library has been patched to accept an optional `TwoWire&` parameter (defaulting to `Wire`) so passing `Wire1` routes it to I2C1.
 
-**Why GPIO for encoder VCC?** The left edge of the Pico has no VCC pins — only GNDs at physical positions 3, 8, 13, 17. Using a GPIO pin set OUTPUT HIGH avoids routing a wire to the right-edge 3V3 pin. A rotary encoder draws ~1 mA (just the internal pull-up resistors), well within the 12 mA GPIO source limit.
+**Why GPIO for encoder VCC?** The left edge of the Pico has no VCC pins — only GNDs at physical positions 3, 8, 13, 18. Using a GPIO pin set OUTPUT HIGH avoids routing a wire to the right-edge 3V3 pin. A rotary encoder draws ~1 mA (just the internal pull-up resistors), well within the 12 mA GPIO source limit.
 
 **TMC2100 CFG pin wiring (on driver module, not Pico):**
 
@@ -121,11 +121,11 @@ LCD:      SDA→GP14, SCL→GP15, GND→GND, VCC→VSYS (5V, right edge)  [uses 
 
 ### JST connector groups (protoboard, left edge of Pico)
 
-JST connectors soldered to the protoboard next to the Pico. The Pico left edge has GND pins at physical positions 3, 8, 13, 17 — the groups below exploit these.
+JST connectors soldered to the protoboard next to the Pico. The Pico left edge has GND pins at physical positions 3, 8, 13, 18 — the groups below exploit these.
 
 | Connector | Pins (physical order) | Wires |
 |-----------|----------------------|-------|
-| **LCD** (4-pin) | GND · SDA · SCL · VCC | GND=pin 17; SDA=GP14; SCL=GP15; VCC from VSYS via protoboard trace |
+| **LCD** (4-pin) | GND · SDA · SCL · VCC | GND=pin 18; SDA=GP14; SCL=GP15; VCC from VSYS via protoboard trace |
 | **Buttons** (4-pin) | FWD · REV · GND · SS | FWD=GP0; REV=GP1; GND=pin 3; SS=GP2 |
 | **ENC2** (5-pin) | VCC · CLK · GND · DT · SW | VCC=GP4; CLK=GP5; GND=pin 8; DT=GP6; SW=GP7 |
 | **ENC1** (4-pin) | CLK · GND · DT · VCC | CLK=GP9; GND=pin 13; DT=GP10; VCC=GP11 |
@@ -149,3 +149,32 @@ The motor box is a noisy environment. The TMC2100 switches at high frequency and
 
 **Already handled in software:**
 - 50 ms debounce on `pressed()` rejects any glitch shorter than 50 ms, which covers most interference.
+
+---
+
+## Build Status
+
+### Done
+- Protoboard layout finalised — Pico W mounted USB-up, TMC2100 on the other side
+- All JST sockets soldered to protoboard
+- Pin assignment finalised (see table above)
+- Firmware complete and compiling cleanly
+- `LiquidCrystal_I2C` library patched to support Wire1 (I2C1 on GP14/GP15)
+
+### Next session — patch wires
+Connect each JST socket to its Pico pin with short traces or jumper wires on the protoboard:
+
+| What | From (JST pin) | To (Pico pin) |
+|------|---------------|---------------|
+| Buttons | FWD=GP0, REV=GP1, GND, SS=GP2 | physical pins 1, 2, 3, 4 |
+| ENC2 | VCC=GP4, CLK=GP5, GND, DT=GP6, SW=GP7 | physical pins 6, 7, 8, 9, 10 |
+| ENC1 | CLK=GP9, GND, DT=GP10, VCC=GP11 | physical pins 12, 13, 14, 15 |
+| LCD | GND, SDA=GP14, SCL=GP15, VCC=VSYS | physical pins 18, 19, 20, power rail |
+| Motor | DIR=GP3, STEP=GP12, ENABLE=GP13 | hard-wired to TMC2100 |
+
+### Still to do after wiring
+- Verify TMC2100 CFG pin microstep setting (check CFG1/CFG2 solder bridges, update `MICROSTEPS` in sketch)
+- First power-on test: confirm LCD initialises and shows startup screen
+- Test jog direction — if carriage moves wrong way, flip `DIRECTION_SIGN` to `-1` in sketch
+- Set home and limit, run a cutting cycle
+- Confirm step count accuracy (measure actual travel vs expected mm)
