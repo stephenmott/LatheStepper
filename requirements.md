@@ -102,8 +102,8 @@ Update `MICROSTEPS` in the sketch to match whatever CFG1/CFG2 are set to.
              GP10 ──┤ ENC1 DT        GP21  ├── (free)
              GP11 ──┤ ENC1 VCC*      GP20  ├── (free)
              GP12 ──┤ STEP           GP19  ├── (free)
-              GND ──┤ GND            GP18  ├── (free)
-             GP13 ──┤ ENABLE          GND  ├──
+             GP13 ──┤ ENABLE         GP18  ├── (free)
+              GND ──┤ GND             GND  ├──
              GP14 ──┤ LCD SDA        GP17  ├── (free)
              GP15 ──┤ LCD SCL        GP16  ├── (free)
                     └──────────────────────┘
