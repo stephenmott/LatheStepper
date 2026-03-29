@@ -1,9 +1,9 @@
 /*
   LatheStepper v2  —  Positional lathe carriage controller
-  Sieg C0 Z-axis lead screw, Raspberry Pi Pico W + TMC2100
+  Sieg C0 Z-axis lead screw, Raspberry Pi Pico W + DRV8825
 
   Board:  Raspberry Pi Pico W — arduino-pico core (Earle Philhower, NOT Arduino Mbed OS RP2040).
-  Driver: TMC2100, CFG pins hardwired on module (not driven by Pico).
+  Driver: DRV8825, CFG pins hardwired on module (not driven by Pico).
           Update MICROSTEPS below to match CFG1/CFG2 setting if known.
 
   Pins (Pico mounted USB-up; GP0 = top of left edge, GP15 = bottom):
@@ -11,7 +11,7 @@
     GP1       Reverse button  (INPUT_PULLUP)              │   (GND pin between GP1 and GP2)
     GND
     GP2       Start/Stop — remote box (INPUT_PULLUP)     ┘
-    GP3       DIR  → TMC2100 (hard-wired)
+    GP3       DIR  → DRV8825 (hard-wired)
     GP4       ENC2 VCC (OUTPUT HIGH — encoder supply)    ┐
     GP5       Jog enc CLK     (interrupt)                 │ 5-pin JST: VCC,CLK,GND,DT,SW
     GND
@@ -22,9 +22,9 @@
     GND
     GP10      Speed enc DT                                 │ 4-pin JST: CLK,GND,DT,VCC
     GP11      ENC1 VCC (OUTPUT HIGH — encoder supply)     ┘   (GND between GP9 and GP10)
-    GP12      STEP → TMC2100 (hard-wired)
+    GP12      STEP → DRV8825 (hard-wired)
     GP12      (free)
-    GP13      ENABLE → TMC2100 (active LOW, hard-wired)
+    GP13      ENABLE → DRV8825 (active LOW, hard-wired)
     GND
     GP14      LCD SDA (I2C1 / Wire1) — as physically wired ┐ 4-pin JST: GND,SDA,SCL,VCC
     GP15      LCD SCL (I2C1 / Wire1)                        ┘
@@ -52,7 +52,7 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
-#include <TMC2100.h>
+#include <DRV8825.h>
 #include <EEPROM.h>
 #include <WiFi.h>
 #include <ArduinoOTA.h>
@@ -62,7 +62,7 @@
 #define PIN_BTN_FWD    0    // resume cut (also: confirm startup)      ┐ 4-pin JST:
 #define PIN_BTN_REV    1    // return home after e-stop               │ FWD,REV,GND,SS
 #define PIN_BTN_SS     2    // Start/Stop — remote box, twisted pair  ┘ (GND at pin 3)
-#define PIN_DIR        3    // TMC2100 — hard-wired, can reach anywhere on board
+#define PIN_DIR        3    // DRV8825 — hard-wired, can reach anywhere on board
 #define PIN_ENC2_VCC   4    // OUTPUT HIGH — supplies encoder 2 VCC via 5-pin JST
 #define PIN_ENC2_CLK   5    // jog encoder CLK (interrupt)
 #define PIN_ENC2_DT    6    // jog encoder DT
@@ -71,14 +71,14 @@
 #define PIN_ENC1_CLK   9    // speed encoder CLK (interrupt)
 #define PIN_ENC1_DT   10    // speed encoder DT
 #define PIN_ENC1_VCC  11    // OUTPUT HIGH — supplies encoder 1 VCC via 4-pin JST
-#define PIN_STEP      12    // TMC2100 — hard-wired
+#define PIN_STEP      12    // DRV8825 — hard-wired
 #define PIN_ENABLE    13    // active LOW
 #define PIN_LCD_SDA   14    // I2C1 — as physically wired
 #define PIN_LCD_SCL   15    // I2C1
 
 // ── Motor ─────────────────────────────────────────────────────────────────────
 #define MOTOR_STEPS    400     // 0.9°/step NEMA 17
-#define MICROSTEPS      16     // update to match TMC2100 CFG1/CFG2 — verify empirically
+#define MICROSTEPS      16     // update to match DRV8825 CFG1/CFG2 — verify empirically
 #define LEADSCREW_MM   1.0f   // Empirically measured: M8 fine pitch 1.0 mm/rev
                               // (commanded 9.9 mm, got 6.5 mm with 1.5 → corrected to 1.0)
 #define DIRECTION_SIGN   1     // flip to -1 if carriage moves wrong way
@@ -113,7 +113,7 @@ struct Settings {
 const float STEPS_PER_MM = (float)(MOTOR_STEPS * MICROSTEPS) / LEADSCREW_MM;
 
 // ── Objects ───────────────────────────────────────────────────────────────────
-TMC2100           stepper(MOTOR_STEPS, PIN_DIR, PIN_STEP, PIN_ENABLE);
+DRV8825           stepper(MOTOR_STEPS, PIN_DIR, PIN_STEP, PIN_ENABLE);
 LiquidCrystal_I2C lcd(0x27, 20, 4, Wire1);  // GP14/GP15 = I2C1
 
 // ── State machine ─────────────────────────────────────────────────────────────
