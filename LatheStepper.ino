@@ -91,7 +91,8 @@
 #define RPM_RAPID_DEF  80     // default rapid return — raise once stable
 #define RPM_JOG_SLOW   30     // jog speed when turning encoder one tick at a time (fine positioning)
 #define RPM_JOG_FAST  150     // jog speed when spinning encoder fast (traversing)
-#define IDLE_TIMEOUT_MS 300000UL  // 5 minutes — stepper disabled, any key wakes
+#define IDLE_TIMEOUT_MS   300000UL  // 5 minutes — stepper disabled, any key wakes
+#define DOUBLE_CLICK_MS      350UL  // JOG SW double-click window
 #define ACCEL         200     // steps/s² — ramp up/down to avoid stall
 
 // ── EEPROM ────────────────────────────────────────────────────────────────────
@@ -326,7 +327,7 @@ void updateDisplay() {
     case ST_READY:
       printRow(0, "Pos:%5.1f /%5.1fmm", pos, lim);
       printRow(1, "Cut %3dRPM Rtn%3dRPM", cutRPM, rapidRPM);
-      printRow(2, "RPM knob: %s speed", editRapid ? "RETURN" : "CUT   ");
+      printRow(2, "JogSW=Jog 2x=ReHome ");
       printSoftKeys(editRapid ? ">CUT" : ">RTN", "CUT",
                     stepperManualOff ? "ENABLE" : "DISABL");
       break;
@@ -573,9 +574,27 @@ void loop() {
         else                  stepper.enable();
         displayDirty = true;
       }
-      if (enc2Pressed) {
-        state        = ST_JOG;
-        displayDirty = true;
+      // JOG SW: single-click = jog mode, double-click = re-home
+      // Hold off single-click by DOUBLE_CLICK_MS so double-click can be detected cleanly.
+      {
+        static unsigned long enc2FirstMs = 0;
+        if (enc2Pressed) {
+          if (enc2FirstMs && millis() - enc2FirstMs < DOUBLE_CLICK_MS) {
+            // Double-click — go back to homing
+            enc2FirstMs = 0;
+            limitSet    = false;
+            state       = ST_HOMING;
+          } else {
+            enc2FirstMs = millis();   // first click — start window
+          }
+          displayDirty = true;
+        }
+        if (enc2FirstMs && millis() - enc2FirstMs >= DOUBLE_CLICK_MS) {
+          // Window expired with no second click — single-click confirmed
+          enc2FirstMs = 0;
+          state       = ST_JOG;
+          displayDirty = true;
+        }
       }
       break;
 
