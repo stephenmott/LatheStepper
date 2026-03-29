@@ -89,7 +89,8 @@
 #define RPM_STEP       10
 #define RPM_CUT_DEF    40     // default cutting speed — conservative starting point
 #define RPM_RAPID_DEF  80     // default rapid return — raise once stable
-#define RPM_JOG       150     // jog speed during homing/setup/jog mode
+#define RPM_JOG_SLOW   30     // jog speed when turning encoder one tick at a time (fine positioning)
+#define RPM_JOG_FAST  150     // jog speed when spinning encoder fast (traversing)
 #define IDLE_TIMEOUT_MS 300000UL  // 5 minutes — stepper disabled, any key wakes
 #define ACCEL         200     // steps/s² — ramp up/down to avoid stall
 
@@ -261,14 +262,15 @@ void stopMotor() {
   motionActive = false;
 }
 
-// Move enc2 ticks × 0.1 mm at jog speed.  No-op if motor already moving.
+// Move enc2 ticks × 0.1 mm.  Speed is automatic: slow when turning one tick at
+// a time (fine positioning), fast when spinning (traversing).  No-op if moving.
 void startJog(int ticks) {
   if (ticks == 0 || motionActive) return;
   long delta = (long)(ticks * 0.1f * STEPS_PER_MM);
   if (delta == 0) return;
   stepDir = (delta > 0) ? 1 : -1;
   float degrees = (float)delta / (MOTOR_STEPS * MICROSTEPS) * 360.0f * DIRECTION_SIGN;
-  stepper.setRPM(RPM_JOG);
+  stepper.setRPM(abs(ticks) == 1 ? RPM_JOG_SLOW : RPM_JOG_FAST);
   stepper.enable();
   stepper.startRotate(degrees);
   motionActive = true;
