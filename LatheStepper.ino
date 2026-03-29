@@ -79,7 +79,8 @@
 // ── Motor ─────────────────────────────────────────────────────────────────────
 #define MOTOR_STEPS    400     // 0.9°/step NEMA 17
 #define MICROSTEPS      16     // update to match TMC2100 CFG1/CFG2 — verify empirically
-#define LEADSCREW_MM   1.5f   // M8 leadscrew: 1.5 mm per revolution
+#define LEADSCREW_MM   1.0f   // Empirically measured: M8 fine pitch 1.0 mm/rev
+                              // (commanded 9.9 mm, got 6.5 mm with 1.5 → corrected to 1.0)
 #define DIRECTION_SIGN   1     // flip to -1 if carriage moves wrong way
 
 // ── Speed ─────────────────────────────────────────────────────────────────────
@@ -88,7 +89,8 @@
 #define RPM_STEP       10
 #define RPM_CUT_DEF    40     // default cutting speed — conservative starting point
 #define RPM_RAPID_DEF  80     // default rapid return — raise once stable
-#define RPM_JOG        30     // fixed jog speed during homing/setup
+#define RPM_JOG       150     // jog speed during homing/setup/jog mode
+#define IDLE_TIMEOUT_MS 300000UL  // 5 minutes — stepper disabled, any key wakes
 #define ACCEL         200     // steps/s² — ramp up/down to avoid stall
 
 // ── EEPROM ────────────────────────────────────────────────────────────────────
@@ -140,8 +142,11 @@ bool limitSet   = false;
 
 // ── Runtime flags ─────────────────────────────────────────────────────────────
 volatile bool motionActive = false;
-bool displayDirty = true;
-bool editRapid    = false;   // true = RPM knob edits rapid speed; false = cut speed
+bool displayDirty       = true;
+bool editRapid          = false;   // true = RPM knob edits rapid speed; false = cut speed
+bool sleeping           = false;   // true = idle timeout fired, stepper disabled
+bool stepperManualOff   = false;   // true = user manually disabled stepper via RIGHT in ST_READY
+unsigned long lastActivityMs = 0;
 
 // ── Button debounce ───────────────────────────────────────────────────────────
 // Struct declared before any function — prevents Arduino IDE auto-prototype
@@ -241,6 +246,7 @@ void saveSettings() {
 void startMove(long targetSteps, int rpm) {
   long delta = targetSteps - currentSteps;
   if (delta == 0) return;
+  stepperManualOff = false;   // starting a move always re-enables the stepper
   stepDir = (delta > 0) ? 1 : -1;
   float degrees = (float)delta / (MOTOR_STEPS * MICROSTEPS) * 360.0f * DIRECTION_SIGN;
   stepper.setRPM(rpm);
@@ -319,7 +325,8 @@ void updateDisplay() {
       printRow(0, "Pos:%5.1f /%5.1fmm", pos, lim);
       printRow(1, "Cut %3dRPM Rtn%3dRPM", cutRPM, rapidRPM);
       printRow(2, "RPM knob: %s speed", editRapid ? "RETURN" : "CUT   ");
-      printSoftKeys(editRapid ? ">CUT" : ">RTN", "CUT", "");
+      printSoftKeys(editRapid ? ">CUT" : ">RTN", "CUT",
+                    stepperManualOff ? "ENABLE" : "DISABL");
       break;
 
     case ST_JOG:
@@ -464,7 +471,39 @@ void loop() {
   bool ssPressed   = pressed(btnSS);
   bool enc2Pressed = pressed(btnEnc2);
 
+  bool anyActivity = e1 || e2 || fwdPressed || revPressed || ssPressed || enc2Pressed;
+
+  // ── Idle sleep / wake ────────────────────────────────────────────────────
+  if (anyActivity) {
+    lastActivityMs = millis();
+    if (sleeping) {
+      // First input just wakes — don't process it further this cycle
+      sleeping = false;
+      if (!stepperManualOff) stepper.enable();
+      displayDirty = true;
+      return;
+    }
+  }
+  if (!motionActive && !sleeping &&
+      millis() - lastActivityMs > IDLE_TIMEOUT_MS) {
+    sleeping = true;
+    stepper.disable();
+    displayDirty = true;
+  }
+
   // ── State machine ────────────────────────────────────────────────────────
+  if (sleeping) {
+    if (displayDirty) {
+      lcd.clear();
+      printRow(0, "    STEPPER OFF     ");
+      printRow(1, "");
+      printRow(2, "  Press any button  ");
+      printRow(3, "     to wake up     ");
+      displayDirty = false;
+    }
+    return;
+  }
+
   switch (state) {
 
     case ST_STARTUP:
@@ -523,6 +562,13 @@ void loop() {
       if (ssPressed && limitSet) {
         startMove(limitSteps, cutRPM);
         state        = ST_CUTTING;
+        displayDirty = true;
+      }
+      // RIGHT button manually disables/re-enables stepper (e.g. to move carriage by hand)
+      if (revPressed) {
+        stepperManualOff = !stepperManualOff;
+        if (stepperManualOff) stepper.disable();
+        else                  stepper.enable();
         displayDirty = true;
       }
       if (enc2Pressed) {
