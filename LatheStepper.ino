@@ -9,19 +9,23 @@
   Pins (Pico mounted USB-up; GP0 = top of left edge, GP15 = bottom):
     GP0       Forward button  (INPUT_PULLUP)              ┐ 4-pin JST: FWD,REV,GND,SS
     GP1       Reverse button  (INPUT_PULLUP)              │   (GND pin between GP1 and GP2)
+    GND
     GP2       Start/Stop — remote box (INPUT_PULLUP)     ┘
     GP3       DIR  → TMC2100 (hard-wired)
     GP4       ENC2 VCC (OUTPUT HIGH — encoder supply)    ┐
     GP5       Jog enc CLK     (interrupt)                 │ 5-pin JST: VCC,CLK,GND,DT,SW
+    GND
     GP6       Jog enc DT                                  │   (GND between GP5 and GP6)
     GP7       Jog enc SW      (INPUT_PULLUP)              ┘
     GP8       (free — gap between ENC2 and ENC1 plugs)
     GP9       Speed enc CLK   (interrupt)                 ┐
+    GND
     GP10      Speed enc DT                                 │ 4-pin JST: CLK,GND,DT,VCC
     GP11      ENC1 VCC (OUTPUT HIGH — encoder supply)     ┘   (GND between GP9 and GP10)
     GP12      STEP → TMC2100 (hard-wired)
     GP12      (free)
     GP13      ENABLE → TMC2100 (active LOW, hard-wired)
+    GND
     GP14      LCD SDA (I2C1 / Wire1) — as physically wired ┐ 4-pin JST: GND,SDA,SCL,VCC
     GP15      LCD SCL (I2C1 / Wire1)                        ┘
 
@@ -77,16 +81,17 @@
 
 // ── Speed ─────────────────────────────────────────────────────────────────────
 #define RPM_MIN        10
-#define RPM_MAX       400
+#define RPM_MAX       200     // raise once motor/driver tuned
 #define RPM_STEP       10
-#define RPM_CUT_DEF    80     // default cutting speed
-#define RPM_RAPID_DEF 400     // default rapid return speed
-#define RPM_JOG        40     // fixed jog speed during homing/setup
+#define RPM_CUT_DEF    40     // default cutting speed — conservative starting point
+#define RPM_RAPID_DEF  80     // default rapid return — raise once stable
+#define RPM_JOG        30     // fixed jog speed during homing/setup
+#define ACCEL         200     // steps/s² — ramp up/down to avoid stall
 
 // ── EEPROM ────────────────────────────────────────────────────────────────────
 #define EEPROM_SIZE    64
 // Increment magic when Settings struct layout changes — forces defaults on next boot.
-#define SETTINGS_MAGIC 0xCAFE0002UL
+#define SETTINGS_MAGIC 0xCAFE0003UL
 
 struct Settings {
   uint32_t magic;
@@ -110,6 +115,7 @@ enum State : uint8_t {
   ST_HOMING,     // jog to home position, press enc2 SW to zero
   ST_SETUP,      // jog to left limit, press enc2 SW to store
   ST_READY,      // home + limit set, waiting for Start
+  ST_JOG,        // free jog mode — move carriage for loading/unloading
   ST_CUTTING,    // running toward limit at cut speed
   ST_RETURNING,  // rapid return to home
   ST_STOPPED     // emergency stop mid-move
@@ -117,10 +123,11 @@ enum State : uint8_t {
 State state = ST_STARTUP;
 
 // ── Volatile (written by ISRs, read by main loop) ─────────────────────────────
-volatile int    enc1Ticks    = 0;   // speed encoder accumulator
-volatile int    enc2Ticks    = 0;   // jog encoder accumulator
-volatile long   currentSteps = 0;   // absolute position from home, counted by stepISR
-volatile int8_t stepDir      = 1;   // +1 = toward limit, -1 = toward home; set before moves
+volatile int    enc1Ticks     = 0;     // speed encoder accumulator
+volatile int    enc2Ticks     = 0;     // jog encoder accumulator
+volatile long   currentSteps  = 0;     // absolute position from home, counted by stepISR
+volatile int8_t stepDir       = 1;     // +1 = toward limit, -1 = toward home; set before moves
+volatile bool   motionComplete = false; // set by core 1 when nextAction() returns 0
 
 // ── Settings (persisted to flash) ────────────────────────────────────────────
 int  cutRPM     = RPM_CUT_DEF;
@@ -129,8 +136,9 @@ long limitSteps = 0;
 bool limitSet   = false;
 
 // ── Runtime flags ─────────────────────────────────────────────────────────────
-bool motionActive = false;
+volatile bool motionActive = false;
 bool displayDirty = true;
+bool editRapid    = false;   // true = RPM knob edits rapid speed; false = cut speed
 
 // ── Button debounce ───────────────────────────────────────────────────────────
 // Struct declared before any function — prevents Arduino IDE auto-prototype
@@ -142,12 +150,32 @@ DebouncedBtn btnSS   = { PIN_BTN_SS,   HIGH, 0 };
 DebouncedBtn btnEnc2 = { PIN_ENC2_SW,  HIGH, 0 };
 
 // ── ISRs ──────────────────────────────────────────────────────────────────────
+// Full quadrature state-machine decoder.
+// QEM[prev<<2 | curr]: +1 = one CW step, -1 = one CCW step, 0 = invalid/bounce.
+// Four accumulated steps = one physical detent on standard EC11 (4 PPR) encoders.
+// If it takes TWO turns to move one step, change the threshold from 4 to 2.
+// Bounce produces invalid transitions → QEM returns 0 → automatically ignored.
+// No time-based debounce needed.
+static const int8_t QEM[16] = { 0,-1, 1, 0, 1, 0, 0,-1,-1, 0, 0, 1, 0, 1,-1, 0 };
+
 void enc1ISR() {
-  enc1Ticks += (digitalRead(PIN_ENC1_DT) != digitalRead(PIN_ENC1_CLK)) ? 1 : -1;
+  static uint8_t prev = 0b11;   // idle state with INPUT_PULLUP: both pins HIGH
+  static int8_t  sub  = 0;
+  uint8_t curr = (digitalRead(PIN_ENC1_CLK) << 1) | digitalRead(PIN_ENC1_DT);
+  sub += QEM[prev << 2 | curr];
+  prev = curr;
+  if (sub >=  4) { enc1Ticks++; sub -= 4; }
+  if (sub <= -4) { enc1Ticks--; sub += 4; }
 }
 
 void enc2ISR() {
-  enc2Ticks += (digitalRead(PIN_ENC2_DT) != digitalRead(PIN_ENC2_CLK)) ? 1 : -1;
+  static uint8_t prev = 0b11;
+  static int8_t  sub  = 0;
+  uint8_t curr = (digitalRead(PIN_ENC2_CLK) << 1) | digitalRead(PIN_ENC2_DT);
+  sub += QEM[prev << 2 | curr];
+  prev = curr;
+  if (sub >=  4) { enc2Ticks++; sub -= 4; }
+  if (sub <= -4) { enc2Ticks--; sub += 4; }
 }
 
 // Attached to PIN_STEP (an output pin — valid on RP2040).
@@ -238,6 +266,25 @@ void startJog(int ticks) {
 }
 
 // ── Display ───────────────────────────────────────────────────────────────────
+// Row 3 soft-key bar: [Left  ][Centre  ][Right ]  (6+8+6 = 20 chars)
+// Centre label is centred within its 8-char slot.
+void printSoftKeys(const char* l, const char* c, const char* r) {
+  char buf[21];
+  memset(buf, ' ', 20);
+  buf[20] = '\0';
+  // Left-aligned in cols 0-5
+  int ll = min((int)strlen(l), 6);
+  memcpy(buf, l, ll);
+  // Centred in cols 6-13
+  int cl = min((int)strlen(c), 8);
+  memcpy(buf + 6 + (8 - cl) / 2, c, cl);
+  // Left-aligned in cols 14-19
+  int rl = min((int)strlen(r), 6);
+  memcpy(buf + 14, r, rl);
+  lcd.setCursor(0, 3);
+  lcd.print(buf);
+}
+
 void updateDisplay() {
   float pos = stepsToMm(currentSteps);
   float lim = stepsToMm(limitSteps);
@@ -246,51 +293,58 @@ void updateDisplay() {
 
     case ST_STARTUP:
       printRow(0, "  LATHE STEPPER v2  ");
-      printRow(1, "Cut speed: %3d RPM", cutRPM);
-      printRow(2, "Rapid ret: %3d RPM", rapidRPM);
-      printRow(3, "Enc1=cut Enc2=rapid");
+      printRow(1, "RPM knob: cut %3dRPM", cutRPM);
+      printRow(2, "JOG knob: rtn %3dRPM", rapidRPM);
+      printSoftKeys("GO", "CONFIRM", "");
       break;
 
     case ST_HOMING:
       printRow(0, "Pos: %6.1f mm", pos);
       printRow(1, "--- SET HOME -------");
-      printRow(2, "Jog enc2 to start");
-      printRow(3, "Enc2 SW = Set Home");
+      printRow(2, "JOG=move  SW=SetHome");
+      printSoftKeys("", "", "");
       break;
 
     case ST_SETUP:
       printRow(0, "Pos: %6.1f mm", pos);
       printRow(1, "--- SET LIMIT ------");
-      printRow(2, "Jog enc2 near chuck");
-      printRow(3, "Enc2 SW = Set Limit");
+      printRow(2, "JOG=move   SW=SetLim");
+      printSoftKeys("", "", "");
       break;
 
     case ST_READY:
       printRow(0, "Pos:%5.1f /%5.1fmm", pos, lim);
-      printRow(1, "Cut:%3dRPM Rp:%3dRPM", cutRPM, rapidRPM);
-      printRow(2, "READY");
-      printRow(3, limitSet ? "Start/Stop = Cut" : "! Set limit first");
+      printRow(1, "Cut %3dRPM Rtn%3dRPM", cutRPM, rapidRPM);
+      printRow(2, "RPM knob: %s speed", editRapid ? "RETURN" : "CUT   ");
+      printSoftKeys(editRapid ? ">CUT" : ">RTN", "CUT", "");
+      break;
+
+    case ST_JOG:
+      printRow(0, "Pos:%5.1f /%5.1fmm", pos, lim);
+      printRow(1, "--- JOG MODE -------");
+      printRow(2, "JOG=move  JOGSW=Done");
+      printSoftKeys("", "CUT", "");
       break;
 
     case ST_CUTTING:
       printRow(0, "Pos:%5.1f /%5.1fmm", pos, lim);
-      printRow(1, "Cut: %3d RPM", cutRPM);
-      printRow(2, ">> CUTTING");
-      printRow(3, "Start/Stop = E-Stop");
+      printRow(1, ">> CUTTING  %3dRPM", cutRPM);
+      printRow(2, "RPM knob adjusts spd");
+      printSoftKeys("", "E-STOP", "");
       break;
 
     case ST_RETURNING:
       printRow(0, "Pos:%5.1f /%5.1fmm", pos, lim);
-      printRow(1, "Rapid: %3d RPM", rapidRPM);
-      printRow(2, "<< RETURNING");
-      printRow(3, "Start/Stop = E-Stop");
+      printRow(1, "<< RETURNING %3dRPM", rapidRPM);
+      printRow(2, "");
+      printSoftKeys("", "E-STOP", "");
       break;
 
     case ST_STOPPED:
       printRow(0, "Pos:%5.1f /%5.1fmm", pos, lim);
       printRow(1, "*** E-STOP ***");
-      printRow(2, "Fwd=cont  Rev=home");
-      printRow(3, "Start/Stop = Resume");
+      printRow(2, "");
+      printSoftKeys("RESUME", "", "RETURN");
       break;
   }
 
@@ -309,6 +363,7 @@ void setup() {
 
   stepper.begin(cutRPM, MICROSTEPS);
   stepper.setEnableActiveState(LOW);
+  stepper.setSpeedProfile(stepper.LINEAR_SPEED, ACCEL, ACCEL);
   stepper.disable();
 
   // GPIO pins used as encoder VCC rails (encoders draw ~1 mA — well within 12 mA limit).
@@ -324,8 +379,13 @@ void setup() {
   pinMode(PIN_ENC2_DT,  INPUT_PULLUP);
   pinMode(PIN_ENC2_SW,  INPUT_PULLUP);
 
+  // Attach CHANGE interrupts on both CLK and DT so the state machine
+  // sees every quadrature edge — gives solid direction detection and
+  // self-filtering of bounce without any time-based debounce.
   attachInterrupt(digitalPinToInterrupt(PIN_ENC1_CLK), enc1ISR, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(PIN_ENC1_DT),  enc1ISR, CHANGE);
   attachInterrupt(digitalPinToInterrupt(PIN_ENC2_CLK), enc2ISR, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(PIN_ENC2_DT),  enc2ISR, CHANGE);
   // PIN_STEP is driven as an output by the stepper library.
   // Attaching RISING interrupt to an output pin is valid on RP2040 —
   // fires on every step pulse to keep currentSteps accurate after e-stop.
@@ -341,9 +401,9 @@ void setup() {
 // ── loop() ────────────────────────────────────────────────────────────────────
 void loop() {
 
-  // ── Drive motor; detect move completion ─────────────────────────────────
-  if (motionActive && stepper.nextAction() == 0) {
-    motionActive = false;
+  // ── Detect move completion (nextAction() runs on core 1) ────────────────
+  if (motionComplete) {
+    motionComplete = false;
     switch (state) {
       case ST_CUTTING:
         currentSteps = limitSteps;   // snap to exact target
@@ -411,19 +471,44 @@ void loop() {
         limitSteps = currentSteps;
         limitSet   = true;
         saveSettings();
-        state        = ST_READY;
+        startMove(0, rapidRPM);  // rapid-return to home after setting limit
+        state        = ST_RETURNING;
         displayDirty = true;
       }
       break;
 
     case ST_READY:
-      // Enc1 adjusts cut speed while waiting
+      // RPM knob edits cut or rapid speed depending on editRapid toggle
       if (e1) {
-        cutRPM = constrain(cutRPM + e1 * RPM_STEP, RPM_MIN, RPM_MAX);
+        if (editRapid) rapidRPM = constrain(rapidRPM + e1 * RPM_STEP, RPM_MIN, RPM_MAX);
+        else           cutRPM   = constrain(cutRPM   + e1 * RPM_STEP, RPM_MIN, RPM_MAX);
         saveSettings();
         displayDirty = true;
       }
+      // LEFT button toggles which speed the RPM knob edits
+      if (fwdPressed) {
+        editRapid    = !editRapid;
+        displayDirty = true;
+      }
       if (ssPressed && limitSet) {
+        startMove(limitSteps, cutRPM);
+        state        = ST_CUTTING;
+        displayDirty = true;
+      }
+      if (enc2Pressed) {
+        state        = ST_JOG;
+        displayDirty = true;
+      }
+      break;
+
+    case ST_JOG:
+      // Free jog for loading/unloading — enc2 moves carriage, SW exits
+      if (e2) { startJog(e2); displayDirty = true; }
+      if (enc2Pressed && !motionActive) {
+        state        = ST_READY;
+        displayDirty = true;
+      }
+      if (ssPressed && limitSet && !motionActive) {
         startMove(limitSteps, cutRPM);
         state        = ST_CUTTING;
         displayDirty = true;
@@ -477,5 +562,21 @@ void loop() {
     updateDisplay();
     lastDisplay  = millis();
     displayDirty = false;
+  }
+}
+
+// ── Core 1 ────────────────────────────────────────────────────────────────────
+// Dedicated tight loop for step generation.  Calling nextAction() from core 0
+// caused jerky motion because LCD I2C updates etc. delayed step timing.
+// Core 1 spins freely, calling nextAction() as fast as possible so step
+// intervals are accurate regardless of what core 0 is doing.
+void setup1() { /* nothing — stepper already initialised by core 0 setup() */ }
+
+void loop1() {
+  if (motionActive) {
+    if (stepper.nextAction() == 0) {
+      motionActive   = false;
+      motionComplete = true;   // core 0 will see this and handle state transition
+    }
   }
 }

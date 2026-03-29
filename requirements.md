@@ -157,24 +157,28 @@ The motor box is a noisy environment. The TMC2100 switches at high frequency and
 ### Done
 - Protoboard layout finalised — Pico W mounted USB-up, TMC2100 on the other side
 - All JST sockets soldered to protoboard
-- Pin assignment finalised (see table above)
-- Firmware complete and compiling cleanly
+- All patch wires complete — buttons, encoders, LCD, motor all wired and tested
 - `LiquidCrystal_I2C` library patched to support Wire1 (I2C1 on GP14/GP15)
+- Firmware working end-to-end: startup → homing → setup → cutting cycle → return
+- Encoder ISRs replaced with full quadrature state machine (no more jerky/random steps)
+- Motor stepping moved to core 1 — smooth stepping regardless of LCD update overhead
+- Acceleration profile added (`LINEAR_SPEED`, 200 steps/s²) — no more stall on rapid return
+- New **ST_JOG** state — press JOG encoder SW in ST_READY to enter free-jog mode for loading/unloading
+- LEFT button toggles RPM knob between editing cut speed and return speed in ST_READY
+- LCD row 3 is now a context-sensitive soft-key bar showing `[LEFT][START/STOP][RIGHT]` labels
+- Encoder labels updated throughout display: Enc1 → RPM knob, Enc2 → JOG knob
+- Auto rapid-return to home after setting limit (carriage was sitting at limit, causing delta=0 on first cut)
 
-### Next session — patch wires
-Connect each JST socket to its Pico pin with short traces or jumper wires on the protoboard:
+### Enclosure
+- New wider enclosure designed in OnShape — landscape 16:9 format, LCD centred, RPM knob left, JOG knob + buttons right
+- To be 3D printed on H2D with multi-colour for integrated labels (no paint/vinyl)
+- Sealed 16mm buttons ordered for oil/swarf resistance
+- **Next: print new enclosure, fit to lathe**
 
-| What | From (JST pin) | To (Pico pin) |
-|------|---------------|---------------|
-| Buttons | FWD=GP0, REV=GP1, GND, SS=GP2 | physical pins 1, 2, 3, 4 |
-| ENC2 | VCC=GP4, CLK=GP5, GND, DT=GP6, SW=GP7 | physical pins 6, 7, 8, 9, 10 |
-| ENC1 | CLK=GP9, GND, DT=GP10, VCC=GP11 | physical pins 12, 13, 14, 15 |
-| LCD | GND, SDA=GP14, SCL=GP15, VCC=VSYS | physical pins 18, 19, 20, power rail |
-| Motor | DIR=GP3, STEP=GP12, ENABLE=GP13 | hard-wired to TMC2100 |
-
-### Still to do after wiring
-- Verify TMC2100 CFG pin microstep setting (check CFG1/CFG2 solder bridges, update `MICROSTEPS` in sketch)
-- First power-on test: confirm LCD initialises and shows startup screen
-- Test jog direction — if carriage moves wrong way, flip `DIRECTION_SIGN` to `-1` in sketch
-- Set home and limit, run a cutting cycle
+### Still to do
+- Print and fit new enclosure
+- Verify step count accuracy — measure actual travel vs expected mm, adjust `MICROSTEPS` if needed
+- Confirm `DIRECTION_SIGN` is correct once mounted on lathe (flip to `-1` if carriage moves wrong way)
+- Tune RPM limits — `RPM_MAX` currently 200; raise once motor behaviour on lathe is confirmed
+- Consider tuning `ACCEL` value once fitted (currently 200 steps/s²)
 - Confirm step count accuracy (measure actual travel vs expected mm)

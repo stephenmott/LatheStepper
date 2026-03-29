@@ -76,13 +76,28 @@ All logic lives in `LatheStepper.ino`.
 
 | State | Description |
 |-------|-------------|
-| `ST_STARTUP` | Show stored speeds; enc1 adjusts cut RPM, enc2 adjusts rapid RPM. Start/Stop confirms. |
-| `ST_HOMING` | Jog carriage to home position with enc2. Press enc2 SW to zero position. |
-| `ST_SETUP` | Jog to left limit with enc2. Press enc2 SW to store limit. |
-| `ST_READY` | Waiting to cut. Start/Stop begins a cycle. |
-| `ST_CUTTING` | Running to left limit at cut speed. Completion auto-triggers return. |
+| `ST_STARTUP` | Show stored speeds; RPM knob adjusts cut RPM, JOG knob adjusts rapid RPM. Start/Stop or LEFT confirms. |
+| `ST_HOMING` | Jog carriage to home position with JOG knob. Press JOG SW to zero position. |
+| `ST_SETUP` | Jog to left limit with JOG knob. Press JOG SW to store limit. Auto rapid-returns to home on confirm. |
+| `ST_READY` | Waiting to cut. LEFT toggles RPM knob between cut/rapid speed editing. JOG SW enters jog mode. Start/Stop begins cycle. |
+| `ST_JOG` | Free jog mode for loading/unloading. JOG knob moves carriage. JOG SW returns to ST_READY. Start/Stop begins cut. |
+| `ST_CUTTING` | Running to left limit at cut speed. RPM knob adjusts speed mid-cut. Completion auto-triggers return. |
 | `ST_RETURNING` | Rapid return to home. Completion returns to ST_READY. |
-| `ST_STOPPED` | Emergency stop. Fwd/Start = resume cut; Rev = return home. |
+| `ST_STOPPED` | Emergency stop. LEFT/Start = resume cut; RIGHT = return home. |
+
+**Dual-core architecture:**
+- **Core 0** (`loop()`) — state machine, button/encoder polling, LCD updates, EEPROM
+- **Core 1** (`loop1()`) — tight loop calling `stepper.nextAction()` as fast as possible for smooth step timing
+- `motionActive` (volatile bool) — set by core 0 to start a move; cleared by core 1 when complete
+- `motionComplete` (volatile bool) — set by core 1 when move finishes; core 0 acts on it and clears it
+- This split is critical: LCD I2C updates on core 0 would otherwise cause jerky stepping
+
+**Encoder ISRs:**
+- Both encoders use a full quadrature state-machine decoder (`QEM[16]` lookup table)
+- Interrupts on CHANGE of both CLK and DT pins — catches all four edges per detent
+- Accumulates sub-counts; fires a tick every 4 valid quadrature steps (one physical detent on EC11 encoders)
+- Invalid transitions (bounce) return 0 — self-debouncing, no time-based debounce needed
+- If it takes two turns per step, change the `>= 4` threshold to `>= 2` in both ISRs
 
 **Position tracking:**
 - `currentSteps` (volatile long) — absolute position in steps from home
@@ -95,23 +110,24 @@ All logic lives in `LatheStepper.ino`.
 - `startJog(ticks)` — moves `ticks × 0.1 mm` at `RPM_JOG`; no-op if motor already moving
 - `stopMotor()` — calls `stepper.stop()` + `stepper.disable()`
 - `saveSettings()` / `loadSettings()` — persist cut RPM, rapid RPM and limit to flash via EEPROM emulation
+- `printSoftKeys(l, c, r)` — renders the row 3 button legend: left (6 chars), centre (8 chars centred), right (6 chars)
 
 **Settings persistence (EEPROM emulation):**
 - Philhower core provides `EEPROM.h` backed by a flash slice
 - Stored: `cutRPM`, `rapidRPM`, `limitSteps`, `limitValid`
-- Home is NOT stored — must be re-set each session by jogging + enc2 SW press
+- Home is NOT stored — must be re-set each session by jogging + JOG SW press
 - `SETTINGS_MAGIC` constant guards against reading stale/uninitialised flash; increment it if the `Settings` struct layout changes
 
 **Display** (refreshed on state change or every 250 ms while moving):
 - Row 0: position readout `Pos: XX.X / YY.Ymm`
 - Row 1: speeds or state label
-- Row 2: status / direction arrow
-- Row 3: context hint for next action
+- Row 2: status / encoder hint
+- Row 3: soft-key bar `[LEFT  ][ START  ][RIGHT ]` — context labels for the three buttons
 
-**`DIRECTION_SIGN`** (`#define`, default `1`): flip to `−1` if the carriage moves the wrong way when jogging. Independent of encoder wiring — if enc2 turns in the wrong direction, swap its CLK/DT wires instead.
+**`DIRECTION_SIGN`** (`#define`, default `1`): flip to `−1` if the carriage moves the wrong way when jogging. Independent of encoder wiring — if JOG knob turns wrong way, swap its CLK/DT wires instead.
 
 ## Physical layout
 
-Two enclosures:
-- **Top box** (mounted above lathe, visible): LCD, speed encoder (enc1), jog encoder (enc2) with push button, Forward button, Reverse button
-- **Motor box** (near motor/tailstock end): Start/Stop button only
+Two enclosures — both 3D printed on Bambu H2D with multi-colour for integrated labels:
+- **Top box** (mounted above lathe, visible): landscape format, LCD centred, RPM knob left, JOG knob + LEFT/RIGHT buttons right, sealed 16mm buttons
+- **Motor box** (near motor/tailstock end): single sealed Start/Stop button
