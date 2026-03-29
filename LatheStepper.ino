@@ -78,7 +78,7 @@
 
 // ── Motor ─────────────────────────────────────────────────────────────────────
 #define MOTOR_STEPS    400     // 0.9°/step NEMA 17
-#define MICROSTEPS      16     // update to match DRV8825 CFG1/CFG2 — verify empirically
+#define MICROSTEPS       1     // DRV8825 M0/M1/M2 all unconnected = full step
 #define LEADSCREW_MM   1.0f   // Empirically measured: M8 fine pitch 1.0 mm/rev
                               // (commanded 9.9 mm, got 6.5 mm with 1.5 → corrected to 1.0)
 #define DIRECTION_SIGN   1     // flip to -1 if carriage moves wrong way
