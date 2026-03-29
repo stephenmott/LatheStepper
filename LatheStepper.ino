@@ -54,6 +54,9 @@
 #include <LiquidCrystal_I2C.h>
 #include <TMC2100.h>
 #include <EEPROM.h>
+#include <WiFi.h>
+#include <ArduinoOTA.h>
+#include "secrets.h"     // WIFI_SSID, WIFI_PASS, OTA_PASS — not committed to git
 
 // ── Pins ──────────────────────────────────────────────────────────────────────
 #define PIN_BTN_FWD    0    // resume cut (also: confirm startup)      ┐ 4-pin JST:
@@ -394,12 +397,39 @@ void setup() {
   EEPROM.begin(EEPROM_SIZE);
   loadSettings();
 
+  // ── WiFi + OTA ────────────────────────────────────────────────────────────
+  // Try to connect to WiFi for OTA uploads. Non-blocking: if the network
+  // isn't available we give up after 10 s and continue normally — the lathe
+  // still works without WiFi, just no OTA.
+  printRow(0, "Connecting WiFi...");
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  uint32_t wifiStart = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - wifiStart < 10000) {
+    delay(250);
+  }
+  if (WiFi.status() == WL_CONNECTED) {
+    ArduinoOTA.setPassword(OTA_PASS);
+    // Stop the motor before flashing — carriage must not move during OTA.
+    ArduinoOTA.onStart([]() { stopMotor(); });
+    ArduinoOTA.begin();
+    Serial.print("OTA ready, IP: ");
+    Serial.println(WiFi.localIP());
+    printRow(0, ("OTA: " + WiFi.localIP().toString()).c_str());
+    delay(1500);   // brief pause so IP is readable on LCD
+  } else {
+    Serial.println("WiFi not available — OTA disabled.");
+  }
+
   updateDisplay();
   Serial.println("LatheStepper v2 ready.");
 }
 
 // ── loop() ────────────────────────────────────────────────────────────────────
 void loop() {
+
+  // ── OTA ─────────────────────────────────────────────────────────────────
+  if (WiFi.status() == WL_CONNECTED) ArduinoOTA.handle();
 
   // ── Detect move completion (nextAction() runs on core 1) ────────────────
   if (motionComplete) {
