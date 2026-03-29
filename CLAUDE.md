@@ -23,19 +23,33 @@ The official Arduino Mbed RP2040 core does support the Pico, but in practice has
 - `LiquidCrystal I2C claims to run on avr architecture` — the library predates non-AVR Arduino boards; it works fine on RP2040
 - `'B00000001' is deprecated` — LiquidCrystal_I2C uses old AVR-style binary literals; functionally identical to modern `0b00000001` syntax
 
+**Flash size — required for OTA:**
+Tools → Flash Size → **"2MB (Sketch: 1MB, FS: 1MB)"**
+The Philhower OTA stores incoming firmware in LittleFS before applying it, so a filesystem partition is required. The sketch is ~415 KB so 1 MB sketch space is ample. This setting must be used for both the initial USB flash and all subsequent OTA uploads.
+
 ```bash
 # Install the rp2040 core (once)
 arduino-cli core install rp2040:rp2040
 
-# Compile
-arduino-cli compile --fqbn rp2040:rp2040:rpipicow LatheStepper/
+# Compile (with filesystem partition for OTA)
+arduino-cli compile --fqbn rp2040:rp2040:rpipicow:flash=2097152_1048576 LatheStepper/
 
-# Upload (Pico W appears as a USB serial port on Mac — adjust port as needed)
-arduino-cli upload -p /dev/cu.usbmodem* --fqbn rp2040:rp2040:rpipicow LatheStepper/
+# Upload via USB (first flash, or recovery)
+arduino-cli upload -p /dev/cu.usbmodem* --fqbn rp2040:rp2040:rpipicow:flash=2097152_1048576 LatheStepper/
+
+# Upload via WiFi OTA (once OTA firmware is running)
+arduino-cli upload --port <pico-ip-address> --fqbn rp2040:rp2040:rpipicow:flash=2097152_1048576 LatheStepper/
 
 # Monitor serial output (9600 baud)
 arduino-cli monitor -p /dev/cu.usbmodem* -c baudrate=9600
 ```
+
+**OTA setup:**
+1. Copy `secrets.h.example` → `secrets.h` and fill in your WiFi credentials
+2. Flash once via USB with the filesystem partition setting above
+3. On boot the LCD briefly shows the Pico's IP address; it also prints to Serial
+4. Subsequent uploads: Arduino IDE → Tools → Port → Network Ports (select Pico IP), or use `arduino-cli upload --port <IP>` as above
+5. If WiFi is unavailable at boot, the lathe starts normally after a 10 s timeout — OTA is just disabled that session
 
 Libraries must be installed in `~/Documents/Arduino/libraries/`:
 - `StepperDriver` — motor control (by Laurentiu Badea — use the `TMC2100` class)
