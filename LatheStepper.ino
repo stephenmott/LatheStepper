@@ -97,7 +97,7 @@
 #define JOG_MM_COARSE 0.5f   // traversing — spinning fast
 #define IDLE_TIMEOUT_MS   300000UL  // 5 minutes — stepper disabled, any key wakes
 #define DOUBLE_CLICK_MS      350UL  // JOG SW double-click window
-#define ACCEL         300     // steps/s² — conservative to prevent missed steps on jog
+#define ACCEL        2000     // steps/s² — high enough for snappy jog response at low RPM
 
 // ── EEPROM ────────────────────────────────────────────────────────────────────
 #define EEPROM_SIZE    64
@@ -153,7 +153,6 @@ bool editRapid          = false;   // true = RPM knob edits rapid speed; false =
 bool sleeping           = false;   // true = idle timeout fired, stepper disabled
 bool stepperManualOff   = false;   // true = user manually disabled stepper via RIGHT in ST_READY
 unsigned long lastActivityMs = 0;
-int  pendingJogTicks    = 0;       // ticks buffered while motor is busy — fired on next free cycle
 
 // ── Button debounce ───────────────────────────────────────────────────────────
 // Struct declared before any function — prevents Arduino IDE auto-prototype
@@ -538,12 +537,8 @@ void loop() {
       break;
 
     case ST_HOMING:
-      pendingJogTicks += e2;
-      if (!motionActive && pendingJogTicks) {
-        startJog(pendingJogTicks); pendingJogTicks = 0; displayDirty = true;
-      }
+      if (e2 && !motionActive) { startJog(e2); displayDirty = true; }
       if (enc2Pressed && !motionActive) {
-        pendingJogTicks = 0;
         currentSteps = 0;     // this position is now home
         limitSet     = false; // new home invalidates any stored limit
         state        = ST_SETUP;
@@ -552,10 +547,7 @@ void loop() {
       break;
 
     case ST_SETUP:
-      pendingJogTicks += e2;
-      if (!motionActive && pendingJogTicks) {
-        startJog(pendingJogTicks); pendingJogTicks = 0; displayDirty = true;
-      }
+      if (e2 && !motionActive) { startJog(e2); displayDirty = true; }
       if (enc2Pressed && !motionActive) {
         limitSteps = currentSteps;
         limitSet   = true;
@@ -617,12 +609,8 @@ void loop() {
 
     case ST_JOG:
       // Free jog for loading/unloading — enc2 moves carriage, SW exits
-      pendingJogTicks += e2;
-      if (!motionActive && pendingJogTicks) {
-        startJog(pendingJogTicks); pendingJogTicks = 0; displayDirty = true;
-      }
+      if (e2 && !motionActive) { startJog(e2); displayDirty = true; }
       if (enc2Pressed && !motionActive) {
-        pendingJogTicks = 0;
         state        = ST_READY;
         displayDirty = true;
       }
