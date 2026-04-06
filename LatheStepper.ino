@@ -89,11 +89,15 @@
 #define RPM_STEP       10
 #define RPM_CUT_DEF    40     // default cutting speed — conservative starting point
 #define RPM_RAPID_DEF  80     // default rapid return — raise once stable
-#define RPM_JOG_SLOW   20     // jog speed when turning encoder one tick at a time (fine positioning)
-#define RPM_JOG_FAST   60     // jog speed when spinning encoder fast (traversing)
+#define RPM_JOG        20     // jog speed — always slow to prevent missed steps
+// Distance per encoder tick scales with spin speed instead of RPM:
+//   1 tick (slow/precise) = JOG_MM_FINE mm
+//   2+ ticks (fast/traverse) = JOG_MM_COARSE mm per tick
+#define JOG_MM_FINE   0.1f   // fine positioning — one careful tick
+#define JOG_MM_COARSE 0.5f   // traversing — spinning fast
 #define IDLE_TIMEOUT_MS   300000UL  // 5 minutes — stepper disabled, any key wakes
 #define DOUBLE_CLICK_MS      350UL  // JOG SW double-click window
-#define ACCEL         500     // steps/s² — tune to highest value that doesn't miss steps under load
+#define ACCEL         300     // steps/s² — conservative to prevent missed steps on jog
 
 // ── EEPROM ────────────────────────────────────────────────────────────────────
 #define EEPROM_SIZE    64
@@ -264,15 +268,20 @@ void stopMotor() {
   motionActive = false;
 }
 
-// Move enc2 ticks × 0.1 mm.  Speed is automatic: slow when turning one tick at
-// a time (fine positioning), fast when spinning (traversing).  No-op if moving.
+/// Move enc2 ticks at a constant safe RPM.
+// Distance scales with spin speed — fast spin = more mm per tick, not faster motor.
+// This avoids missed steps (which corrupt position) while still allowing quick traverse.
+//   1 tick  → JOG_MM_FINE   (0.1mm) — precise single-click positioning
+//   2+ ticks → JOG_MM_COARSE (0.5mm per tick) — fast traverse
+// No-op if motor already moving.
 void startJog(int ticks) {
   if (ticks == 0 || motionActive) return;
-  long delta = (long)(ticks * 0.1f * STEPS_PER_MM);
+  float mmPerTick = (abs(ticks) == 1) ? JOG_MM_FINE : JOG_MM_COARSE;
+  long delta = (long)(ticks * mmPerTick * STEPS_PER_MM);
   if (delta == 0) return;
   stepDir = (delta > 0) ? 1 : -1;
   float degrees = (float)delta / (MOTOR_STEPS * MICROSTEPS) * 360.0f * DIRECTION_SIGN;
-  stepper.setRPM(abs(ticks) == 1 ? RPM_JOG_SLOW : RPM_JOG_FAST);
+  stepper.setRPM(RPM_JOG);
   stepper.enable();
   stepper.startRotate(degrees);
   motionActive = true;
