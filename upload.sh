@@ -11,7 +11,7 @@
 
 FQBN="rp2040:rp2040:rpipicow:flash=2097152_1048576"
 SKETCH="LatheStepper"
-ARDUINO_CLI="/Applications/Arduino IDE.app/Contents/Resources/app/lib/backend/resources/"$ARDUINO_CLI""
+ARDUINO_CLI="/Applications/Arduino IDE.app/Contents/Resources/app/lib/backend/resources/arduino-cli"
 
 # Read Pico IP from secrets.h if present (looks for OTA_IP, PICO_IP or OTA_HOST)
 PICO_IP=$(grep 'OTA_IP\|PICO_IP\|OTA_HOST' secrets.h 2>/dev/null | grep -o '"[^"]*"' | tr -d '"' | head -1)
