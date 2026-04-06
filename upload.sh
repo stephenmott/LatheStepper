@@ -13,8 +13,9 @@ FQBN="rp2040:rp2040:rpipicow:flash=2097152_1048576"
 SKETCH="."
 ARDUINO_CLI="/Applications/Arduino IDE.app/Contents/Resources/app/lib/backend/resources/arduino-cli"
 
-# Read Pico IP from secrets.h if present (looks for OTA_IP, PICO_IP or OTA_HOST)
+# Read OTA settings from secrets.h
 PICO_IP=$(grep 'OTA_IP\|PICO_IP\|OTA_HOST' secrets.h 2>/dev/null | grep -o '"[^"]*"' | tr -d '"' | head -1)
+OTA_PASS=$(grep 'OTA_PASS' secrets.h 2>/dev/null | grep -o '"[^"]*"' | tr -d '"' | head -1)
 
 echo "=== LatheStepper build ==="
 echo "FQBN: $FQBN"
@@ -40,7 +41,7 @@ case "${1:-}" in
       read PICO_IP
     fi
     echo "Uploading via WiFi OTA to $PICO_IP..."
-    "$ARDUINO_CLI" upload --port "$PICO_IP" --fqbn "$FQBN" "$SKETCH"
+    "$ARDUINO_CLI" upload --port "$PICO_IP" --fqbn "$FQBN" --upload-field password="$OTA_PASS" "$SKETCH"
     ;;
   *)
     echo "Compile OK. Run with 'usb' or 'wifi' to upload."
