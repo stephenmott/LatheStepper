@@ -11,6 +11,7 @@
 
 FQBN="rp2040:rp2040:rpipicow:flash=2097152_1048576"
 SKETCH="LatheStepper"
+ARDUINO_CLI="/Applications/Arduino IDE.app/Contents/Resources/app/lib/backend/resources/"$ARDUINO_CLI""
 
 # Read Pico IP from secrets.h if present (looks for OTA_IP, PICO_IP or OTA_HOST)
 PICO_IP=$(grep 'OTA_IP\|PICO_IP\|OTA_HOST' secrets.h 2>/dev/null | grep -o '"[^"]*"' | tr -d '"' | head -1)
@@ -21,7 +22,7 @@ echo ""
 
 # Compile
 echo "Compiling..."
-arduino-cli compile --fqbn "$FQBN" "$SKETCH" || exit 1
+"$ARDUINO_CLI" compile --fqbn "$FQBN" "$SKETCH" || exit 1
 
 case "${1:-}" in
   usb)
@@ -31,7 +32,7 @@ case "${1:-}" in
       exit 1
     fi
     echo "Uploading via USB on $PORT..."
-    arduino-cli upload -p "$PORT" --fqbn "$FQBN" "$SKETCH"
+    "$ARDUINO_CLI" upload -p "$PORT" --fqbn "$FQBN" "$SKETCH"
     ;;
   wifi)
     if [ -z "$PICO_IP" ]; then
@@ -39,7 +40,7 @@ case "${1:-}" in
       read PICO_IP
     fi
     echo "Uploading via WiFi OTA to $PICO_IP..."
-    arduino-cli upload --port "$PICO_IP" --fqbn "$FQBN" "$SKETCH"
+    "$ARDUINO_CLI" upload --port "$PICO_IP" --fqbn "$FQBN" "$SKETCH"
     ;;
   *)
     echo "Compile OK. Run with 'usb' or 'wifi' to upload."
