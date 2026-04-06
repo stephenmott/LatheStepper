@@ -87,17 +87,17 @@
 #define RPM_MIN        10
 #define RPM_MAX       200     // raise once motor/driver tuned
 #define RPM_STEP       10
-#define RPM_CUT_DEF    40     // default cutting speed — conservative starting point
-#define RPM_RAPID_DEF  80     // default rapid return — raise once stable
+#define RPM_CUT_DEF    20     // default cutting speed — reduced due to motor stalling under load
+#define RPM_RAPID_DEF  40     // default rapid return — raise once stable
 #define RPM_JOG        20     // jog speed — always slow to prevent missed steps
 // Distance per encoder tick scales with spin speed instead of RPM:
 //   1 tick (slow/precise) = JOG_MM_FINE mm
 //   2+ ticks (fast/traverse) = JOG_MM_COARSE mm per tick
 #define JOG_MM_FINE   0.1f   // fine positioning — one careful tick
-#define JOG_MM_COARSE 0.5f   // traversing — spinning fast
+#define JOG_MM_COARSE 0.2f   // traversing — smaller = less overshoot when stopping
 #define IDLE_TIMEOUT_MS   300000UL  // 5 minutes — stepper disabled, any key wakes
 #define DOUBLE_CLICK_MS      350UL  // JOG SW double-click window
-#define ACCEL        2000     // steps/s² — high enough for snappy jog response at low RPM
+#define ACCEL        5000     // steps/s² — higher = snappier jog, motor safe at 20 RPM
 
 // ── EEPROM ────────────────────────────────────────────────────────────────────
 #define EEPROM_SIZE    64
