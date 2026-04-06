@@ -89,11 +89,11 @@
 #define RPM_STEP       10
 #define RPM_CUT_DEF    40     // default cutting speed — conservative starting point
 #define RPM_RAPID_DEF  80     // default rapid return — raise once stable
-#define RPM_JOG_SLOW   30     // jog speed when turning encoder one tick at a time (fine positioning)
-#define RPM_JOG_FAST  150     // jog speed when spinning encoder fast (traversing)
+#define RPM_JOG_SLOW   20     // jog speed when turning encoder one tick at a time (fine positioning)
+#define RPM_JOG_FAST   60     // jog speed when spinning encoder fast (traversing)
 #define IDLE_TIMEOUT_MS   300000UL  // 5 minutes — stepper disabled, any key wakes
 #define DOUBLE_CLICK_MS      350UL  // JOG SW double-click window
-#define ACCEL        2000     // steps/s² — was 200 (too low: motor never reached target speed)
+#define ACCEL         500     // steps/s² — tune to highest value that doesn't miss steps under load
 
 // ── EEPROM ────────────────────────────────────────────────────────────────────
 #define EEPROM_SIZE    64
